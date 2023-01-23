@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <launchConfiguration type="org.lamport.tla.toolbox.tool.tlc.modelCheck">
     <stringAttribute key="TLCCmdLineParameters" value=""/>
-    <intAttribute key="collectCoverage" value="1"/>
+    <intAttribute key="collectCoverage" value="0"/>
     <stringAttribute key="configurationName" value="Model_1"/>
     <booleanAttribute key="deferLiveness" value="false"/>
     <intAttribute key="dfidDepth" value="100"/>
@@ -12,7 +12,7 @@
     <stringAttribute key="distributedTLC" value="off"/>
     <stringAttribute key="distributedTLCVMArgs" value=""/>
     <intAttribute key="fpBits" value="1"/>
-    <intAttribute key="fpIndex" value="77"/>
+    <intAttribute key="fpIndex" value="80"/>
     <booleanAttribute key="fpIndexRandom" value="true"/>
     <intAttribute key="maxHeapSize" value="51"/>
     <intAttribute key="maxSetSize" value="1000000"/>
@@ -23,7 +23,7 @@
     <intAttribute key="modelBehaviorSpecType" value="1"/>
     <stringAttribute key="modelBehaviorVars" value="ballotingBlock, candidates, decision, round, accepted, pc, block, leader, voted"/>
     <stringAttribute key="modelComments" value=""/>
-    <booleanAttribute key="modelCorrectnessCheckDeadlock" value="false"/>
+    <booleanAttribute key="modelCorrectnessCheckDeadlock" value="true"/>
     <listAttribute key="modelCorrectnessInvariants">
         <listEntry value="0Canary1"/>
         <listEntry value="0Canary2"/>
@@ -35,10 +35,11 @@
     </listAttribute>
     <listAttribute key="modelCorrectnessProperties">
         <listEntry value="0Termination"/>
+        <listEntry value="1NominationLiveness"/>
     </listAttribute>
     <intAttribute key="modelEditorOpenTabs" value="14"/>
     <stringAttribute key="modelExpressionEval" value=""/>
-    <stringAttribute key="modelParameterActionConstraint" value="\A v \in V : round[v]' &lt;= 2"/>
+    <stringAttribute key="modelParameterActionConstraint" value="/\ \A v \in V : round[v]' &lt;= 2&#10;/\ \A v \in V : pc[&lt;&lt;v, &quot;balloting&quot;&gt;&gt;] = &quot;lb1&quot;"/>
     <listAttribute key="modelParameterConstants">
         <listEntry value="B;;{b1, b2};1;1"/>
         <listEntry value="V;;{v1, v2, v3};1;1"/>
@@ -46,8 +47,8 @@
         <listEntry value="Combine;C:;CHOOSE c \in C : TRUE;0;0"/>
         <listEntry value="Hash;b:;TestHash(b);0;0"/>
         <listEntry value="H;;TestH;0;0"/>
-        <listEntry value="Quorum;v:;TestQuorums;0;0"/>
-        <listEntry value="Blocking;v:;TestBlocking;0;0"/>
+        <listEntry value="Quorum;v:;{V};0;0"/>
+        <listEntry value="Blocking;v:;{Bl \in SUBSET V : Cardinality(Bl) = 1};0;0"/>
     </listAttribute>
     <stringAttribute key="modelParameterContraint" value=""/>
     <listAttribute key="modelParameterDefinitions"/>
@@ -62,10 +63,7 @@
     <intAttribute key="simuSeed" value="-1"/>
     <stringAttribute key="specName" value="Nomination"/>
     <stringAttribute key="tlcResourcesProfile" value="local custom"/>
-    <listAttribute key="traceExploreExpressions">
-        <listEntry value="1{ballotingBlock[v] : v \in V} \ {Bot}"/>
-        <listEntry value="1[b \in B |-&gt; \A w \in V : decision[w] # Bot =&gt; b = decision[w]]"/>
-    </listAttribute>
+    <listAttribute key="traceExploreExpressions"/>
     <stringAttribute key="view" value=""/>
     <booleanAttribute key="visualizeStateGraph" value="false"/>
 </launchConfiguration>
