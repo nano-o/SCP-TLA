@@ -2,10 +2,25 @@
 
 (***************************************************************************)
 (* This is a high-level specification of SCP focusing on the nomination    *)
-(* protocol.  In this version, we do not wait on the pre-image to vote or  *)
-(* accept a txset hash.                                                    *)
+(* protocol.  In this version, we do not wait on the pre-image to vote for *)
+(* a txset, but only to accept it.                                         *)
+(*                                                                         *)
+(* In the previous version of this document, we even accepted without a    *)
+(* pre-image.  The problem with this is that nodes that confirm then stop  *)
+(* voting for new values, and this could create a situation in which not   *)
+(* enough nodes can start balloting (i.e.  not a full quorum) and the      *)
+(* whole system is stuck.  This is because, once a e.g.  Tier-1 blocking   *)
+(* set has a candidate, no new values can ever become candidates.  An      *)
+(* adversary could therefore carefully distributed a pre-image to a Tier-1 *)
+(* blocking set B but withold it from any full quorum and halt the system: *)
+(* the next nomination rounds will not help because B would not vote and   *)
+(* therefore prevent any value to become a confirmed candidate.  (the      *)
+(* attack wouldn't work if nodes download pre-image from their peers, but  *)
+(* that's an assumption we have not made and is currently not the case).   *)
+(* So accepting without a pre-image is only workable if there is some way  *)
+(* to guarantee that, once a Tier-1 blocking set has a pre-image, then     *)
+(* everybody in Tier-1 eventually gets it.                                 *)
 (***************************************************************************)
-
 
 EXTENDS Naturals, FiniteSets
 
@@ -50,11 +65,13 @@ ln1:    while (TRUE)
                 voted[self] := @ \union hs \* vote for what the leader has voted for
             }
         } 
-        or with (Q \in Quorum(self), h \in H) { \* accept when voted or accepted by a quorum
+        or with (Q \in Quorum(self), h \in H) { \* accept when voted or accepted by a quorum and we have the pre-image
+            when block[h] # Bot; \* we must have received the block
             when \A w \in Q : h \in voted[w] \/ h \in accepted[w]; \* a quorum has voted or accepted h:
             accepted[self] := @ \union {h}; \* accept h
         }
-        or with (Bl \in Blocking(self), h \in H) { \* accept when accepted by a blocking set
+        or with (Bl \in Blocking(self), h \in H) { \* accept when accepted by a blocking set and we have the pre-image
+            when block[h] # Bot; \* we must have received the block
             when \A w \in Bl : h \in accepted[w];
             accepted[self] := @ \union {h}; \* accept h
         }
@@ -81,7 +98,7 @@ lb2:    with (b \in {ballotingBlock[v] : v \in V} \ {Bot}) {
 }
 *)
 
-\* BEGIN TRANSLATION (chksum(pcal) = "dc900fe1" /\ chksum(tla) = "b15eb58")
+\* BEGIN TRANSLATION (chksum(pcal) = "843080ce" /\ chksum(tla) = "182c0f6")
 VARIABLES ballotingBlock, decision, voted, accepted, pc, round, candidates, 
           block, leader
 
@@ -123,11 +140,13 @@ ln1(self) == /\ pc[self] = "ln1"
                    /\ UNCHANGED <<ballotingBlock, accepted, round, candidates, block, leader>>
                 \/ /\ \E Q \in Quorum(self):
                         \E h \in H:
+                          /\ block[self][h] # Bot
                           /\ \A w \in Q : h \in voted[w] \/ h \in accepted[w]
                           /\ accepted' = [accepted EXCEPT ![self] = @ \union {h}]
                    /\ UNCHANGED <<ballotingBlock, voted, round, candidates, block, leader>>
                 \/ /\ \E Bl \in Blocking(self):
                         \E h \in H:
+                          /\ block[self][h] # Bot
                           /\ \A w \in Bl : h \in accepted[w]
                           /\ accepted' = [accepted EXCEPT ![self] = @ \union {h}]
                    /\ UNCHANGED <<ballotingBlock, voted, round, candidates, block, leader>>
@@ -194,5 +213,5 @@ TypeOkay ==
     /\ leader \in [V -> V \cup {Bot}]
 =============================================================================
 \* Modification History
-\* Last modified Mon Jan 23 08:34:50 PST 2023 by nano
+\* Last modified Mon Jan 23 11:13:45 PST 2023 by nano
 \* Created Fri Jan 13 09:09:00 PST 2023 by nano
