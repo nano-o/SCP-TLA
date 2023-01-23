@@ -28,7 +28,7 @@ CONSTANTS
         accepted = [v \in V |-> {}]; \* Y in the whitepaper (nomination Section)
     process (nomination \in V)
         variables \* local variables:
-            round = 0; \* nothing happens in round 0; the protocol start at round 1
+            round = 0;
             candidates = {}; \* Z in the whitepaper (nomination Section)
             block = [h \in H |-> Bot]; \* a map from hash to corresponding block
             leader = Bot; \* leader for the current round
@@ -194,5 +194,5 @@ TypeOkay ==
     /\ leader \in [V -> V \cup {Bot}]
 =============================================================================
 \* Modification History
-\* Last modified Mon Jan 23 08:34:50 PST 2023 by nano
+\* Last modified Mon Jan 23 08:28:02 PST 2023 by nano
 \* Created Fri Jan 13 09:09:00 PST 2023 by nano
