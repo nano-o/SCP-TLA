@@ -34,6 +34,19 @@
 (* So accepting without a pre-image is only workable if there is some way  *)
 (* to guarantee that, once a Tier-1 blocking set has a pre-image, then     *)
 (* everybody in Tier-1 eventually gets it.                                 *)
+(*                                                                         *)
+(* Another problem is that we want it to be likely that a quorum starts    *)
+(* balloting already in agreement and roughly at the same time.  If we     *)
+(* delay checking pre-images to the confirm stage, an attacker could first *)
+(* send the pre-image to a set A of nodes, which then enter balloting at   *)
+(* time T_A, but not send the pre-image to another set B of nodes, which   *)
+(* then enter balloting at time T_B>>T_A because they need to get the      *)
+(* pre-image from A before starting balloting.  For example, if it takes   *)
+(* 500ms for members of B to get the pre-image from members of A, then     *)
+(* T_B=T_A+500ms.  This can cause the first ballot to end without a        *)
+(* decision.  Members of B could also start a new nomination round before  *)
+(* T_B and then enter balloting not only late but also with a different    *)
+(* value than members of A.                                                *)
 (***************************************************************************)
 
 EXTENDS Naturals, FiniteSets
@@ -255,5 +268,5 @@ NominationLiveness ==
     
 =============================================================================
 \* Modification History
-\* Last modified Mon Jan 23 14:23:09 PST 2023 by nano
+\* Last modified Sun Jan 29 14:51:24 PST 2023 by nano
 \* Created Fri Jan 13 09:09:00 PST 2023 by nano
