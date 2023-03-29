@@ -60,7 +60,7 @@ CONSTANTS
     Combine(_), \* the functions that combines candidates to produce a block for balloting
     H, \* domain of hashes
     Hash(_) \* hash function
-    
+
 (*
 --algorithm SCP {
     variables \* global variables (e.g. representing messages or cross-component variables like ballotingBlock):
@@ -87,11 +87,14 @@ ln1:    while (TRUE)
         }
         or if (candidates = {}) { \* vote for what the leader voted for, unless we have a candidate already
             when leader # Bot;
-            with (hs = voted[leader]) { 
-                await hs # {}; \* wait to hear from the leader 
+            with (hs = voted[leader]) {
+                await hs # {}; \* wait to hear from the leader
                 voted[self] := voted[self] \union hs \* vote for what the leader has voted for
+                \* in the whitepaper version, we would only vote for the hashes for which we have a pre-image:
+                \* with (hsWithPreimage = {h \in hs : preImage[h] # Bot})
+                \* voted[self] := voted[self] \union hsWithPreimage
             }
-        } 
+        }
         or with (Q \in Quorum(self), h \in H) { \* accept when voted or accepted by a quorum and we have the pre-image
             when preImage[h] # Bot; \* we must have received the block
             when \A w \in Q : h \in voted[w] \/ h \in accepted[w]; \* a quorum has voted or accepted h:
@@ -112,10 +115,10 @@ ln1:    while (TRUE)
             \* update the block used in balloting:
             ballotingBlock[self] := Combine(candidates); \* this starts the balloting protocol (see below)
         }
-    } 
+    }
     \* as a first approximation, balloting just decide on one of the balloting blocks:
     \* note we cannot reuse the process ID identifiers used in nomination, so we add the "balloting" tag
-    process (balloting \in {<<v, "balloting">> : v \in V}) { 
+    process (balloting \in {<<v, "balloting">> : v \in V}) {
 lb1:    await ballotingBlock[self[1]] # Bot; \* wait for a confirmed candidate from nomination
 lb2:    with (b \in {ballotingBlock[v] : v \in V} \ {Bot}) {
             when \A w \in V : decision[w] # Bot => b = decision[w];
@@ -125,104 +128,9 @@ lb2:    with (b \in {ballotingBlock[v] : v \in V} \ {Bot}) {
 }
 *)
 
-\* BEGIN TRANSLATION (chksum(pcal) = "e0eea121" /\ chksum(tla) = "199674e2")
-VARIABLES ballotingBlock, decision, voted, accepted, pc, round, candidates, 
-          preImage, leader
-
-vars == << ballotingBlock, decision, voted, accepted, pc, round, candidates, 
-           preImage, leader >>
-
-ProcSet == (V) \cup ({<<v, "balloting">> : v \in V})
-
-Init == (* Global variables *)
-        /\ ballotingBlock = [v \in V |-> Bot]
-        /\ decision = [v \in V |-> Bot]
-        /\ voted = [v \in V |-> {}]
-        /\ accepted = [v \in V |-> {}]
-        (* Process nomination *)
-        /\ round = [self \in V |-> 0]
-        /\ candidates = [self \in V |-> {}]
-        /\ preImage = [self \in V |-> [h \in H |-> Bot]]
-        /\ leader = [self \in V |-> Bot]
-        /\ pc = [self \in ProcSet |-> CASE self \in V -> "ln1"
-                                        [] self \in {<<v, "balloting">> : v \in V} -> "lb1"]
-
-ln1(self) == /\ pc[self] = "ln1"
-             /\ pc' = [pc EXCEPT ![self] = "ln2"]
-             /\ UNCHANGED << ballotingBlock, decision, voted, accepted, round, 
-                             candidates, preImage, leader >>
-
-ln2(self) == /\ pc[self] = "ln2"
-             /\ \/ /\ round' = [round EXCEPT ![self] = round[self] + 1]
-                   /\ \E l \in V:
-                        /\ leader' = [leader EXCEPT ![self] = l]
-                        /\ IF l = self
-                              THEN /\ \E h \in H:
-                                        voted' = [voted EXCEPT ![self] = voted[self] \union {h}]
-                              ELSE /\ TRUE
-                                   /\ voted' = voted
-                   /\ UNCHANGED <<ballotingBlock, accepted, candidates, preImage>>
-                \/ /\ IF candidates[self] = {}
-                         THEN /\ leader[self] # Bot
-                              /\ LET hs == voted[leader[self]] IN
-                                   /\ hs # {}
-                                   /\ voted' = [voted EXCEPT ![self] = voted[self] \union hs]
-                         ELSE /\ TRUE
-                              /\ voted' = voted
-                   /\ UNCHANGED <<ballotingBlock, accepted, round, candidates, preImage, leader>>
-                \/ /\ \E Q \in Quorum(self):
-                        \E h \in H:
-                          /\ preImage[self][h] # Bot
-                          /\ \A w \in Q : h \in voted[w] \/ h \in accepted[w]
-                          /\ accepted' = [accepted EXCEPT ![self] = accepted[self] \union {h}]
-                   /\ UNCHANGED <<ballotingBlock, voted, round, candidates, preImage, leader>>
-                \/ /\ \E Bl \in Blocking(self):
-                        \E h \in H:
-                          /\ preImage[self][h] # Bot
-                          /\ \A w \in Bl : h \in accepted[w]
-                          /\ accepted' = [accepted EXCEPT ![self] = accepted[self] \union {h}]
-                   /\ UNCHANGED <<ballotingBlock, voted, round, candidates, preImage, leader>>
-                \/ /\ \E b \in B:
-                        preImage' = [preImage EXCEPT ![self][Hash(b)] = b]
-                   /\ UNCHANGED <<ballotingBlock, voted, accepted, round, candidates, leader>>
-                \/ /\ \E Q \in Quorum(self):
-                        \E h \in H:
-                          /\ preImage[self][h] # Bot
-                          /\ \A w \in Q : h \in accepted[w]
-                          /\ candidates' = [candidates EXCEPT ![self] = candidates[self] \union {preImage[self][h]}]
-                          /\ ballotingBlock' = [ballotingBlock EXCEPT ![self] = Combine(candidates'[self])]
-                   /\ UNCHANGED <<voted, accepted, round, preImage, leader>>
-             /\ pc' = [pc EXCEPT ![self] = "ln1"]
-             /\ UNCHANGED decision
-
-nomination(self) == ln1(self) \/ ln2(self)
-
-lb1(self) == /\ pc[self] = "lb1"
-             /\ ballotingBlock[self[1]] # Bot
-             /\ pc' = [pc EXCEPT ![self] = "lb2"]
-             /\ UNCHANGED << ballotingBlock, decision, voted, accepted, round, 
-                             candidates, preImage, leader >>
-
-lb2(self) == /\ pc[self] = "lb2"
-             /\ \E b \in {ballotingBlock[v] : v \in V} \ {Bot}:
-                  /\ \A w \in V : decision[w] # Bot => b = decision[w]
-                  /\ decision' = [decision EXCEPT ![self[1]] = b]
-             /\ pc' = [pc EXCEPT ![self] = "Done"]
-             /\ UNCHANGED << ballotingBlock, voted, accepted, round, 
-                             candidates, preImage, leader >>
-
-balloting(self) == lb1(self) \/ lb2(self)
-
-Next == (\E self \in V: nomination(self))
-           \/ (\E self \in {<<v, "balloting">> : v \in V}: balloting(self))
-
-Spec == Init /\ [][Next]_vars
-
-\* END TRANSLATION 
-    
 \* Concrete hashing for the model-checker:
 TestH == 1..Cardinality(B)
-TestHash(b) == 
+TestHash(b) ==
     LET f == CHOOSE f \in [B -> H] : \A b1,b2 \in B : b1 # b2 => f[b1] # f[b2]
     IN f[b]
 
@@ -247,7 +155,7 @@ TypeOkay ==
     /\ candidates \in [V -> SUBSET B]
     /\ preImage \in [V -> [H -> B \cup {Bot}]]
     /\ leader \in [V -> V \cup {Bot}]
-    
+
 (***************************************************************************)
 (* Next we specify a liveness property that we can easily check with the   *)
 (* TLC model-checker.                                                      *)
@@ -265,8 +173,8 @@ TypeOkay ==
 
 NominationLiveness ==
     \A v,w \in V : [](ballotingBlock[v] # Bot => <>(ballotingBlock[w] # Bot))
-    
+
 =============================================================================
 \* Modification History
-\* Last modified Sun Jan 29 14:51:24 PST 2023 by nano
+\* Last modified Wed Mar 29 15:39:16 PDT 2023 by nano
 \* Created Fri Jan 13 09:09:00 PST 2023 by nano
