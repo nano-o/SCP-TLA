@@ -53,18 +53,18 @@ EXTENDS Naturals, FiniteSets
 
 CONSTANTS
     V, \* validators
-    B, \* blocks
+    TxSet, \* blocks
     Bot, \* default value
     Quorum(_), \* Quorum(v) is the set of quorums of validator v
     Blocking(_), \* Blocking(v) is the set of blocking sets of validator v
-    Combine(_), \* the functions that combines candidates to produce a block for balloting
+    Combine(_), \* the functions that combines candidates to produce a txset for balloting
     H, \* domain of hashes
     Hash(_) \* hash function
 
 (*
 --algorithm SCP {
-    variables \* global variables (e.g. representing messages or cross-component variables like ballotingBlock):
-        ballotingBlock = [v \in V |-> Bot]; \* for each validator, the nominated block for balloting
+    variables \* global variables (e.g. representing messages or cross-component variables like ballotingTxSet):
+        ballotingTxSet = [v \in V |-> Bot]; \* for each validator, the nominated txset for balloting
         decision = [v \in V |-> Bot];  \* for each validator, the balloting decision
         voted = [v \in V |-> {}]; \* X in the whitepaper (nomination Section)
         accepted = [v \in V |-> {}]; \* Y in the whitepaper (nomination Section)
@@ -72,7 +72,7 @@ CONSTANTS
         variables \* local variables:
             round = 0; \* nothing happens in round 0; the protocol start at round 1
             candidates = {}; \* Z in the whitepaper (nomination Section)
-            preImage = [h \in H |-> Bot]; \* a map from hash to corresponding block
+            preImage = [h \in H |-> Bot]; \* the pre-images the validator knows about
             leader = Bot; \* leader for the current round
     {
 ln1:    while (TRUE)
@@ -80,10 +80,10 @@ ln1:    while (TRUE)
             round := round + 1;
             with (l \in V) { \* pick a leader
                 leader := l;
-                if (l = self) \* if the leader is the current node, pick a block and and vote for it
-                with (b \in B) {
-                    preImage[Hash(b)] := b;
-                    voted[self] := voted[self] \union {Hash(b)}
+                if (l = self) \* if the leader is the current node, pick a txset and and vote for it
+                with (txs \in TxSet) {
+                    preImage[Hash(txs)] := txs;
+                    voted[self] := voted[self] \union {Hash(txs)}
                 }
             }
         }
@@ -107,22 +107,22 @@ ln1:    while (TRUE)
             when \A w \in Bl : h \in accepted[w];
             accepted[self] := accepted[self] \union {h}; \* accept h
         }
-        or with (b \in B) { \* receive a block
-            preImage[Hash(b)] := b;
+        or with (txs \in TxSet) { \* receive a txset
+            preImage[Hash(txs)] := txs;
         }
         or with (Q \in Quorum(self), h \in H) { \* confirm b as candidate
             when preImage[h] # Bot; \* we must have received the block
             when \A w \in Q : h \in accepted[w]; \* a quorum has accepted h:
             candidates := candidates \union {preImage[h]}; \* add h to the confirmed candidates
             \* update the block used in balloting:
-            ballotingBlock[self] := Combine(candidates); \* this starts the balloting protocol (see below)
+            ballotingTxSet[self] := Combine(candidates); \* this starts the balloting protocol (see below)
         }
     }
     \* as a first approximation, balloting just decide on one of the balloting blocks:
     \* note we cannot reuse the process ID identifiers used in nomination, so we add the "balloting" tag
     process (balloting \in {<<v, "balloting">> : v \in V}) {
-lb1:    await ballotingBlock[self[1]] # Bot; \* wait for a confirmed candidate from nomination
-lb2:    with (b \in {ballotingBlock[v] : v \in V} \ {Bot}) {
+lb1:    await ballotingTxSet[self[1]] # Bot; \* wait for a confirmed candidate from nomination
+lb2:    with (b \in {ballotingTxSet[v] : v \in V} \ {Bot}) {
             when \A w \in V : decision[w] # Bot => b = decision[w];
             decision[self[1]] := b;
         }
@@ -130,34 +130,20 @@ lb2:    with (b \in {ballotingBlock[v] : v \in V} \ {Bot}) {
 }
 *)
 
-\* Concrete hashing for the model-checker:
-TestH == 1..Cardinality(B)
-TestHash(b) ==
-    LET f == CHOOSE f \in [B -> H] : \A b1,b2 \in B : b1 # b2 => f[b1] # f[b2]
-    IN f[b]
-
-\* Debugging canaries:
-Canary1 == \A v \in V : decision[v] = Bot
-Canary2 == \A v \in V : Cardinality(candidates[v]) <= 1
-Canary3 == \A v \in V : ballotingBlock[v] = Bot
-
-TestQuorums == {Q \in SUBSET V : 2*Cardinality(Q)>Cardinality(V)}
-TestBlocking == {Bl \in SUBSET V : Cardinality(Bl) > 1}
-
 (***************************************************************************)
 (* The type-safety invariant:                                              *)
 (***************************************************************************)
 
 TypeOkay ==
-    /\ ballotingBlock \in [V -> B \cup {Bot}]
-    /\ decision \in [V -> B \cup {Bot}]
+    /\ ballotingTxSet \in [V -> TxSet \cup {Bot}]
+    /\ decision \in [V -> TxSet \cup {Bot}]
     /\ voted \in [V -> SUBSET H]
     /\ accepted \in [V -> SUBSET H]
     /\ round \in [V -> Nat]
-    /\ candidates \in [V -> SUBSET B]
-    /\ preImage \in [V -> [H -> B \cup {Bot}]]
+    /\ candidates \in [V -> SUBSET TxSet]
+    /\ preImage \in [V -> [H -> TxSet \cup {Bot}]]
     /\ leader \in [V -> V \cup {Bot}]
-
+    
 (***************************************************************************)
 (* Next we specify a liveness property that we can easily check with the   *)
 (* TLC model-checker.                                                      *)
@@ -174,9 +160,29 @@ TypeOkay ==
 (***************************************************************************)
 
 NominationLiveness ==
-    \A v,w \in V : [](ballotingBlock[v] # Bot => <>(ballotingBlock[w] # Bot))
+    \A v,w \in V : [](ballotingTxSet[v] # Bot => <>(ballotingTxSet[w] # Bot))
+    
+(***************************************************************************)
+(* Definition for model-checking:                                          *)
+(***************************************************************************)
+    
+\* Concrete hashing for the model-checker:
+TestH == 1..Cardinality(TxSet)
+TestHash(b) ==
+    LET f == CHOOSE f \in [TxSet -> H] : \A txs1,txs2 \in TxSet : txs1 # txs2 => f[txs1] # f[txs2]
+    IN f[b]
+
+\* Debugging canaries:
+Canary1 == \A v \in V : decision[v] = Bot
+Canary2 == \A v \in V : Cardinality(candidates[v]) <= 1
+Canary3 == \A v \in V : ballotingTxSet[v] = Bot
+
+TestQuorums == {Q \in SUBSET V : 2*Cardinality(Q)>Cardinality(V)}
+TestBlocking == {Bl \in SUBSET V : Cardinality(Bl) > 1}
+
+
 
 =============================================================================
 \* Modification History
-\* Last modified Wed Mar 29 20:16:02 PDT 2023 by nano
+\* Last modified Wed Mar 29 20:25:42 PDT 2023 by nano
 \* Created Fri Jan 13 09:09:00 PST 2023 by nano

@@ -3,59 +3,59 @@ EXTENDS Nomination, TLC
 
 \* MV CONSTANT declarations@modelParameterConstants
 CONSTANTS
-b1, b2
+v1, v2, v3
 ----
 
 \* MV CONSTANT declarations@modelParameterConstants
 CONSTANTS
-v1, v2, v3
-----
-
-\* MV CONSTANT definitions B
-const_1674512395499224000 == 
-{b1, b2}
+txs1, txs2
 ----
 
 \* MV CONSTANT definitions V
-const_1674512395499225000 == 
+const_168014664997089000 == 
 {v1, v2, v3}
 ----
 
-\* SYMMETRY definition
-symm_1674512395499226000 == 
-Permutations(const_1674512395499224000) \union Permutations(const_1674512395499225000)
+\* MV CONSTANT definitions TxSet
+const_168014664997090000 == 
+{txs1, txs2}
 ----
 
-\* CONSTANT definitions @modelParameterConstants:3Combine(C)
-const_1674512395499227000(C) == 
+\* SYMMETRY definition
+symm_168014664997091000 == 
+Permutations(const_168014664997089000) \union Permutations(const_168014664997090000)
+----
+
+\* CONSTANT definitions @modelParameterConstants:2Combine(C)
+const_168014664997092000(C) == 
 CHOOSE c \in C : TRUE
 ----
 
-\* CONSTANT definitions @modelParameterConstants:4Hash(b)
-const_1674512395499228000(b) == 
+\* CONSTANT definitions @modelParameterConstants:3Hash(b)
+const_168014664997093000(b) == 
 TestHash(b)
 ----
 
-\* CONSTANT definitions @modelParameterConstants:5H
-const_1674512395499229000 == 
+\* CONSTANT definitions @modelParameterConstants:4H
+const_168014664997094000 == 
 TestH
 ----
 
-\* CONSTANT definitions @modelParameterConstants:6Quorum(v)
-const_1674512395499230000(v) == 
+\* CONSTANT definitions @modelParameterConstants:5Quorum(v)
+const_168014664997095000(v) == 
 {V}
 ----
 
 \* CONSTANT definitions @modelParameterConstants:7Blocking(v)
-const_1674512395499231000(v) == 
-{Bl \in SUBSET V : Cardinality(Bl) = 1}
+const_168014664997096000(v) == 
+{V}
 ----
 
 \* ACTION_CONSTRAINT definition @modelParameterActionConstraint:0
-action_constr_1674512395499232000 ==
+action_constr_168014664997097000 ==
 /\ \A v \in V : round[v]' <= 2
 /\ \A v \in V : pc[<<v, "balloting">>] = "lb1"
 ----
 =============================================================================
 \* Modification History
-\* Created Mon Jan 23 14:19:55 PST 2023 by nano
+\* Created Wed Mar 29 20:24:09 PDT 2023 by nano
