@@ -80,9 +80,11 @@ ln1:    while (TRUE)
             round := round + 1;
             with (l \in V) { \* pick a leader
                 leader := l;
-                if (l = self) \* if the leader is the current node, pick a block hash and vote for it
-                    with (h \in H)
-                    voted[self] := voted[self] \union {h}
+                if (l = self) \* if the leader is the current node, pick a block and and vote for it
+                with (b \in B) {
+                    preImage[Hash(b)] := b;
+                    voted[self] := voted[self] \union {Hash(b)}
+                }
             }
         }
         or if (candidates = {}) { \* vote for what the leader voted for, unless we have a candidate already
@@ -176,5 +178,5 @@ NominationLiveness ==
 
 =============================================================================
 \* Modification History
-\* Last modified Wed Mar 29 15:39:16 PDT 2023 by nano
+\* Last modified Wed Mar 29 20:16:02 PDT 2023 by nano
 \* Created Fri Jan 13 09:09:00 PST 2023 by nano
