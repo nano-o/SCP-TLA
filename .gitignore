@@ -23,6 +23,9 @@
 ## Whitelist all folders
 !*/
 
+## quint spec
+!*.qnt
+
 ## Blacklist TLAPS cache folder
 ## See https://github.com/tlaplus/tlapm/issues/16
 __tlacache__
