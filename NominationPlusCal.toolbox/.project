@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>Nomination</name>
+	<name>NominationPlusCal</name>
 	<comment></comment>
 	<projects>
 	</projects>
@@ -15,11 +15,6 @@
 		<nature>toolbox.natures.TLANature</nature>
 	</natures>
 	<linkedResources>
-		<link>
-			<name>Nomination.tla</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Nomination.tla</locationURI>
-		</link>
 		<link>
 			<name>NominationPlusCal.tla</name>
 			<type>1</type>
