@@ -1,3 +1,6 @@
+// -*- mode: Bluespec; -*-
+// the above is for syntax highlighting on github
+
 module Nomination {
     type V = str // validators
     type TxSet = str // transaction sets
