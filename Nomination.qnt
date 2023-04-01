@@ -183,12 +183,14 @@ module Test {
     val VotedHashes = Nomination::VotedHashes
 
     run run1 = {
-        Init.then(StartRound("v1", 1, "v1"))
-            .then(StartRound("v2", 1, "v1"))
-            .then(Vote("v2"))
-            .then(AcceptCase1("v1", VotedHashes.oneOf(), Nomination::Vs))
-            .then(GetTxSet("v2", VotedHashes.oneOf()))
-            .then(AcceptCase2("v2", VotedHashes.oneOf(), Set("v1")))
-            .then(Confirm("v2", VotedHashes.oneOf(), Nomination::Vs))
+        Init.then(StartRound("v1", 1, "v1")) // v1 starts round 1 and elects itself as leader and votes for a txset
+            .then(StartRound("v2", 1, "v1")) // v2 starts round 1 and elects v1 as leader for round 1
+            .then(Vote("v2"))// here v2 votes for the txset voted for by v1
+            .then(
+                val txs = VotedHashes.oneOf()
+                AcceptCase1("v1", txs, Nomination::Vs) // v1 accepts `txs` because {v1,v2} voted for it
+                .then(GetTxSet("v2", txs)) // v2 dowloads the txset
+                .then(AcceptCase2("v2", txs, Set("v1"))) // v2 accepts `txs` because v1 did and is a blocking set
+                .then(Confirm("v2", txs, Nomination::Vs))) // v2 confirms `txs` as nominated
     }
 }
