@@ -9,6 +9,8 @@
 ## Whitelist TLA+ files
 !*.tla
 
+!*.pdf
+
 ## Whitelist TLC model config and results
 !*.cfg
 !*.out  ## Usually .out files are small
