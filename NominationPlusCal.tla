@@ -61,8 +61,7 @@ CONSTANTS
     H, \* domain of hashes
     Hash(_) \* hash function
 
-(*
---algorithm SCP {
+(* --algorithm SCP {
     variables \* global variables (e.g. representing messages or cross-component variables like ballotingTxSet):
         ballotingTxSet = [v \in V |-> Bot]; \* for each validator, the nominated txset for balloting
         decision = [v \in V |-> Bot];  \* for each validator, the balloting decision
@@ -127,8 +126,7 @@ lb2:    with (b \in {ballotingTxSet[v] : v \in V} \ {Bot}) {
             decision[self[1]] := b;
         }
     }
-}
-*)
+} *)
 \* BEGIN TRANSLATION (chksum(pcal) = "b24885fb" /\ chksum(tla) = "95d64d8b")
 VARIABLES ballotingTxSet, decision, voted, accepted, pc, round, candidates, 
           preImage, leader
