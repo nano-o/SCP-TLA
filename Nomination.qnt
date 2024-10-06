@@ -1,6 +1,3 @@
-// -*- mode: Bluespec; -*-
-// the above is for syntax highlighting on github
-
 module Nomination {
     type V = str // validators
     type TxSet = str // transaction sets
@@ -157,40 +154,29 @@ module Nomination {
 }
 
 module Test {
+    val testVs = Set("v1", "v2")
     import Nomination(
-        Vs = Set("v1", "v2"),
+        Vs = testVs,
         TxSets = Set("txset1", "txset2"),
         HashFn = {(x) => x},
         Combine = {ss => ss.chooseSome()},
-        Quorums = {v => Set(Nomination::Vs)},
-        Blocking = {v => Nomination::Vs.powerset().filter(x => x.size() == 1)})
-    as Nomination
+        Quorums = {v => Set(testVs)},
+        Blocking = {v => testVs.powerset().filter(x => x.size() == 1)}
+    ).* // .* means we import everything as is
 
-    def noCandidate: bool = { // TODO: val or def?
-        Nomination::Vs.forall(v => Nomination::candidates.get(v) == Set())
-    }
+    // stateAsRecord is useful to print the whole state in the Quint REPL:
+    val stateAsRecord = {votedNominated: votedNominated, acceptedNominated: acceptedNominated, round: round, candidates: candidates, preImages: preImages, leader: leader}
 
-    // seems like we have to redefine everything in this module.
-    action Init = Nomination::Init
-    action StartRound = Nomination::StartRound
-    action Vote = Nomination::Vote
-    action GetTxSet = Nomination::GetTxSet
-    action AcceptCase1 = Nomination::AcceptCase1
-    action AcceptCase2 = Nomination::AcceptCase2
-    action Confirm = Nomination::Confirm
-    action Step = Nomination::Step
-    val state = {votedNominated: Nomination::votedNominated, acceptedNominated: Nomination::acceptedNominated, round: Nomination::round, candidates: Nomination::candidates, preImages: Nomination::preImages, leader: Nomination::leader}
-    val VotedHashes = Nomination::VotedHashes
-
+    // An example run:
     run run1 = {
         Init.then(StartRound("v1", 1, "v1")) // v1 starts round 1 and elects itself as leader and votes for a txset
             .then(StartRound("v2", 1, "v1")) // v2 starts round 1 and elects v1 as leader for round 1
             .then(Vote("v2"))// here v2 votes for the txset voted for by v1
             .then(
-                val txs = VotedHashes.oneOf()
-                AcceptCase1("v1", txs, Nomination::Vs) // v1 accepts `txs` because {v1,v2} voted for it
+                nondet txs = VotedHashes.oneOf()
+                AcceptCase1("v1", txs, Vs) // v1 accepts `txs` because {v1,v2} voted for it
                 .then(GetTxSet("v2", txs)) // v2 dowloads the txset
                 .then(AcceptCase2("v2", txs, Set("v1"))) // v2 accepts `txs` because v1 did and is a blocking set
-                .then(Confirm("v2", txs, Nomination::Vs))) // v2 confirms `txs` as nominated
+                .then(Confirm("v2", txs, Vs))) // v2 confirms `txs` as nominated
     }
 }

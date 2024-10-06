@@ -69,22 +69,22 @@ vars == << txSetForBalloting, voted, accepted, round, candidates,
 
 Init ==
     /\ txSetForBalloting = [v \in V |-> Bot]
-    /\ voted = [v \in V |-> {}]
-    /\ accepted = [v \in V |-> {}]
+    /\ voted = [v \in V |-> {}] \* variable X in the whitepaper
+    /\ accepted = [v \in V |-> {}] \* variable Y in the whitepaper
     /\ round = [v \in V |-> 0]
-    /\ candidates = [v \in V |-> {}]
+    /\ candidates = [v \in V |-> {}] \* variable Z in the whitepaper
     /\ preImage = [v \in V |-> [h \in H |-> Bot]]
     /\ leader = [v \in V |-> Bot]
 
 StartRound(v) ==
-    /\ round' = [round EXCEPT ![v] = round[v] + 1]
-    /\ \E l \in V :
-        /\ leader' = [leader EXCEPT ![v] = l]
-        /\ IF l = v
-              THEN /\ \E txs \in TxSet:
-                        /\ preImage' = [preImage EXCEPT ![v][Hash(txs)] = txs]
-                        /\ voted' = [voted EXCEPT ![v] = voted[v] \union {Hash(txs)}]
-              ELSE UNCHANGED << voted, preImage>>
+   /\ round' = [round EXCEPT ![v] = round[v] + 1]
+   /\ \E l \in V :
+       /\ leader' = [leader EXCEPT ![v] = l]
+       /\ IF l = v
+             THEN \E txs \in TxSet:
+                     /\ preImage' = [preImage EXCEPT ![v][Hash(txs)] = txs]
+                     /\ voted' = [voted EXCEPT ![v] = voted[v] \union {Hash(txs)}]
+             ELSE UNCHANGED << voted, preImage>>
    /\ UNCHANGED <<txSetForBalloting, accepted, candidates>>
 
 Vote(v) ==
@@ -157,7 +157,7 @@ TypeOkay ==
 (***************************************************************************)
 
 Liveness ==
-    \A v \in V : [](txSetForBalloting[v] # Bot 
+    \A v \in V : [](txSetForBalloting[v] # Bot
         => \E t \in TxSet : <>(\A w \in V : txSetForBalloting[w] = t))
 
 (***************************************************************************)
