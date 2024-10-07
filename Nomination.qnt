@@ -154,13 +154,13 @@ module Nomination {
 }
 
 module Test {
-    val testVs = Set("v1", "v2")
+    val testVs = Set("v1", "v2") // we have two validators
     import Nomination(
         Vs = testVs,
         TxSets = Set("txset1", "txset2"),
-        HashFn = {(x) => x},
+        HashFn = {(x) => x}, // our hash function is just the identity function
         Combine = {ss => ss.chooseSome()},
-        Quorums = {v => Set(testVs)},
+        Quorums = {v => Set(testVs)}, // we have just one quorum consisting of both validators
         Blocking = {v => testVs.powerset().filter(x => x.size() == 1)}
     ).* // .* means we import everything as is
 
