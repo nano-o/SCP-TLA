@@ -1,6 +1,6 @@
------- MODULE TLCAbstractBalloting -----------
+------ MODULE TLCSemiAbstractBalloting -----------
 
-EXTENDS AbstractBalloting, TLC
+EXTENDS SemiAbstractBalloting, TLC
 
 Canary1 == \neg (
     \E n \in N : \E b \in Ballot :

@@ -1,4 +1,4 @@
------------ MODULE ApaAbstractBalloting ------------------
+----------- MODULE ApaSemiAbstractBalloting ------------------
 
 V == {0,1,2}
 N == {"N1_OF_NODE", "N2_OF_NODE", "N3_OF_NODE"}
@@ -21,6 +21,6 @@ VARIABLES
     \* @type: Set(NODE);
     byz
 
-INSTANCE AbstractBalloting
+INSTANCE SemiAbstractBalloting
 
 ====================================================

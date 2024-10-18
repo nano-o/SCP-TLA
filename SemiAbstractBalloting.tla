@@ -1,11 +1,10 @@
-------------- MODULE AbstractBalloting -------------
+------------- MODULE SemiAbstractBalloting -------------
 
-(***************************************************************************************)
-(* This is essentially a formalization of SCP's balloting protocol, as described       *)
-(* in Section 3.5 of the IETF draft at                                                 *)
-(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^'  *)
-(***************************************************************************************)
-
+(**************************************************************************************)
+(* This is a formalization of SCP's abstract balloting protocol described in          *)
+(* Section 3.5 of the IETF draft at                                                   *)
+(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
+(**************************************************************************************)
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS
@@ -14,13 +13,7 @@ CONSTANTS
 ,   BallotNumber \* the set of ballot numbers (i.e. the integers)
 ,   Quorum
 ,   FailProneSet
-    \* Slices \* Slices[n] is the set of quorum slices of node n
 
-\* Quorum == {Q \in SUBSET N :
-    \* \A n \in Q : \E s \in Slices[n] : s \subseteq Q}
-\* Quorums(n) == {Q \in Quorum : n \in Q}
-\* BlockingSets(n) == {B \in SUBSET N :
-    \* \A Q \in Quorum : n \in Q => Q \cap B # {}}
 Quorums(n) == Quorum
 BlockingSets(n) == {B \in SUBSET N :
     \A Q \in Quorum : Q \cap B # {}}
@@ -133,6 +126,7 @@ Safety ==
 VotedToAbort(n, b) ==
     \E b2 \in Ballot : b2 \in voteToPrepare[n] /\ LowerAndIncompatible(b, b2)
 
+\* Inductive invariant proving safety:
 Invariant ==
     /\  TypeOK
     /\  byz \in FailProneSet
