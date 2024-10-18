@@ -28,6 +28,9 @@
 ## quint spec
 !*.qnt
 
+!Makefile
+!*.sh
+
 ## Blacklist TLAPS cache folder
 ## See https://github.com/tlaplus/tlapm/issues/16
 __tlacache__
