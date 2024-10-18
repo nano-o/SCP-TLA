@@ -55,8 +55,6 @@ Init ==
 
 \* Cast a vote to abort all lower incompatible ballots:
 VoteToPrepare(n, b) ==
-    \* we try to prepare only one value per ballot number:
-    /\  \A v \in V : [counter |-> b.counter, value |-> v] \notin voteToPrepare[n]
     \* Restriction 1: cannot vote both commit(b) and abort(b):
     /\  \A b2 \in Ballot : LowerAndIncompatible(b2, b) => b2 \notin voteToCommit[n]
     /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = @ \cup {b}]
