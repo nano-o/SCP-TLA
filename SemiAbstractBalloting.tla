@@ -1,10 +1,12 @@
 ------------- MODULE SemiAbstractBalloting -------------
 
-(**************************************************************************************)
-(* This is a formalization of SCP's abstract balloting protocol described in          *)
-(* Section 3.5 of the IETF draft at                                                   *)
-(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
-(**************************************************************************************)
+(**********************************************************************************)
+(* This is somewhat abstract formalization of SCP's abstract balloting. The main  *)
+(* interesting thing in this specification is that it shows that we can skip the  *)
+(* prepare phase in the first ballot (as long as each node only votes to commit a *)
+(* single value per ballot number).                                               *)
+(**********************************************************************************)
+
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS
@@ -71,7 +73,7 @@ CanVoteOrAcceptToCommit(n, b) ==
     /\  \A b2 \in Ballot : LowerAndIncompatible(b, b2) => b2 \notin voteToPrepare[n]
     \* Restriction 2:
     /\  
-        \/ b.counter = 0 \* TODO: is this a problem?
+        \/ b.counter = 0 \* in the first ballot, we can skip preparing
         \/ \E Q \in Quorums(n) : \A m \in Q : b \in acceptedPrepared[m]
         \/ \E cnt \in BallotNumber : cnt < b.counter /\ [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
 
