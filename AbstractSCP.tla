@@ -3,7 +3,7 @@
 (***************************************************************************************)
 (* This is essentially a formalization of SCP's balloting protocol, as described       *)
 (* in Section 3.5 of the IETF draft at                                                 *)
-(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^'   *)
+(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^'  *)
 (***************************************************************************************)
 
 EXTENDS Naturals, FiniteSets
