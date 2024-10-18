@@ -1,4 +1,4 @@
-------------- MODULE AbstractSCP -------------
+------------- MODULE AbstractBalloting -------------
 
 (***************************************************************************************)
 (* This is essentially a formalization of SCP's balloting protocol, as described       *)
