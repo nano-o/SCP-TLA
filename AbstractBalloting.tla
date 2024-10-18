@@ -56,16 +56,18 @@ Init ==
     /\ externalized = [n \in N |-> {}]
     /\ byz \in FailProneSet
 
-VoteToAbort(n, b) ==
+VoteToAbort(n, B) ==
+    /\ B \subseteq Ballot
     \* Restriction 1: cannot vote both commit(b) and abort(b):
-    /\  \A b2 \in Ballot : LowerAndIncompatible(b2, b) => b2 \notin voteToCommit[n]
-    /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup {b}]
+    /\  \A b \in B : \A b2 \in Ballot : LowerAndIncompatible(b2, b) => b2 \notin voteToCommit[n]
+    /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
     /\  UNCHANGED <<acceptedAborted, voteToCommit, acceptedCommitted, externalized, byz>>
 
-AcceptAborted(n, b) ==
-    /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToAbort[m]
-        \/ \E B \in BlockingSets(n) : \A m \in B : b \in acceptedAborted[m]
-    /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup {b}]
+AcceptAborted(n, B) ==
+    /\  \A b \in B :
+        /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToAbort[m]
+            \/ \E Bl \in BlockingSets(n) : \A m \in Bl : b \in acceptedAborted[m]
+    /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
     /\  UNCHANGED <<voteToAbort, voteToCommit, acceptedCommitted, externalized, byz>>
 
 CanVoteOrAcceptToCommit(n, b) ==
@@ -108,9 +110,9 @@ ByzantineHavoc ==
     /\  UNCHANGED <<externalized, byz>>
 
 Next ==
-    \/ \E n \in N \ byz, b \in Ballot :
-        \/ VoteToAbort(n, b)
-        \/ AcceptAborted(n, b)
+    \/ \E n \in N \ byz, b \in Ballot, B \in SUBSET Ballot :
+        \/ VoteToAbort(n, B)
+        \/ AcceptAborted(n, B)
         \/ VoteToCommit(n, b)
         \/ AcceptCommitted(n, b)
         \/ Externalize(n, b)
