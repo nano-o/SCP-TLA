@@ -19,4 +19,7 @@ $(TLC_JAR):
 semiabstractballoting-safety: $(APA)
 	APA=$(APA) ./check.sh -inductive Invariant SemiAbstractBalloting
 
+abstractballoting-safety: $(APA)
+	APA=$(APA) ./check.sh -inductive Invariant AbstractBalloting
+
 .PHONY: abstract-scp-safety
