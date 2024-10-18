@@ -42,12 +42,12 @@ VARIABLES
 ,   externalized
 ,   byz
 
-TypeOK == \A n \in N : 
-    /\  voteToPrepare[n] \in SUBSET Ballot
-    /\  acceptedPrepared[n] \in SUBSET Ballot
-    /\  voteToCommit[n] \in SUBSET Ballot
-    /\  acceptedCommitted[n] \in SUBSET Ballot
-    /\  externalized[n] \in SUBSET Ballot
+TypeOK ==
+    /\  voteToPrepare \in [N -> SUBSET Ballot]
+    /\  acceptedPrepared \in [N -> SUBSET Ballot]
+    /\  voteToCommit \in [N -> SUBSET Ballot]
+    /\  acceptedCommitted \in [N -> SUBSET Ballot]
+    /\  externalized \in [N -> SUBSET Ballot]
     /\  byz \in SUBSET N
 
 Init ==
@@ -78,7 +78,7 @@ CanVoteOrAcceptToCommit(n, b) ==
     /\  \A b2 \in Ballot : LowerAndIncompatible(b, b2) => b2 \notin voteToPrepare[n]
     \* Restriction 2:
     /\  
-        \* \/ b.counter = 0 \* TODO: is this a problem?
+        \/ b.counter = 0 \* TODO: is this a problem?
         \/ \E Q \in Quorums(n) : \A m \in Q : b \in acceptedPrepared[m]
         \/ \E cnt \in BallotNumber : cnt < b.counter /\ [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
 
@@ -126,7 +126,33 @@ vars == <<voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, exte
 Spec == Init /\ [][Next]_vars
 
 Safety ==
-    \A n1,n2 \in N : \A b1,b2 \in Ballot :
+    \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
+
+\* A vote to prepare is a vote to abort all incompatible lower ballots:
+VotedToAbort(n, b) ==
+    \E b2 \in Ballot : b2 \in voteToPrepare[n] /\ LowerAndIncompatible(b, b2)
+
+Invariant ==
+    /\  TypeOK
+    /\  byz \in FailProneSet
+    /\  \A n \in N \ byz : \A b \in Ballot :
+        /\  \A b2 \in Ballot :
+                b \in voteToCommit[n] /\ b2 \in voteToCommit[n] /\ b # b2 => b.counter # b2.counter
+        /\  \neg (VotedToAbort(n, b) /\ b \in voteToCommit[n])
+        /\  b \in voteToCommit[n] =>
+            \/  b.counter = 0
+            \/  \E Q \in Quorum :
+                \A m \in Q \ byz : b \in acceptedPrepared[m]
+            \/  \E cnt \in BallotNumber :
+                /\  cnt < b.counter
+                /\  [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
+        /\  b \in acceptedPrepared[n] => \E Q \in Quorum :
+                \A m \in Q \ byz : b \in voteToPrepare[m]
+        /\  b \in acceptedCommitted[n] => \E Q \in Quorum :
+                \A m \in Q \ byz : b \in voteToCommit[m]
+        /\  b \in externalized[n] => \E Q \in Quorum :
+                \A m \in Q \ byz : b \in acceptedCommitted[m]
+    /\  Safety
 
 ==============================================

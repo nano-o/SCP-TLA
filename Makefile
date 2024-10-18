@@ -17,6 +17,6 @@ $(TLC_JAR):
 .PRECIOUS: $(APA) $(TLC_JAR)
 
 abstract-scp-safety: $(APA)
-	APA=$(APA) ./check.sh -typecheck AbstractSCP
+	APA=$(APA) ./check.sh -inductive Invariant AbstractSCP
 
 .PHONY: abstract-scp-safety
