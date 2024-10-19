@@ -65,7 +65,7 @@ VoteToAbort(n, B) ==
 
 AcceptAborted(n, B) ==
     /\  \A b \in B :
-        /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToAbort[m]
+        /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToAbort[m] \cup acceptedAborted[m]
             \/ \E Bl \in BlockingSets(n) : \A m \in Bl : b \in acceptedAborted[m]
     /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
     /\  UNCHANGED <<voteToAbort, voteToCommit, acceptedCommitted, externalized, byz>>
@@ -75,11 +75,12 @@ CanVoteOrAcceptToCommit(n, b) ==
     /\  \A b2 \in Ballot : LowerAndIncompatible(b, b2) => b2 \notin voteToAbort[n]
     \* Restriction 2:
     /\  
-        \/ b.counter = 0
+        \/ b.counter = 1 \* Initially, we can skip the prepare phase
         \/ \E Q \in Quorums(n) : \A m \in Q : b \in acceptedAborted[m]
         \/ \E cnt \in BallotNumber : cnt < b.counter /\ [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
 
 VoteToCommit(n, b) ==
+    /\  b.counter > 0
     \* we vote to commit only one value per ballot number:
     /\  \A v \in V : [counter |-> b.counter, value |-> v] \notin voteToCommit[n]
     /\  CanVoteOrAcceptToCommit(n, b)
@@ -88,7 +89,7 @@ VoteToCommit(n, b) ==
 
 AcceptCommitted(n, b) ==
     /\  CanVoteOrAcceptToCommit(n, b)
-    /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToCommit[m]
+    /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToCommit[m] \cup acceptedCommitted[m]
         \/ \E B \in BlockingSets(n) : \A m \in B : b \in acceptedCommitted[m]
     /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<voteToAbort, acceptedAborted, voteToCommit, externalized, byz>>
@@ -135,11 +136,12 @@ Invariant ==
     /\  TypeOK
     /\  byz \in FailProneSet
     /\  \A n \in N \ byz : \A b \in Ballot :
+        /\  b \in voteToCommit[n] \cup acceptedCommitted[n] \cup externalized[n] => b.counter > 0
         /\  \A b2 \in Ballot :
                 b \in voteToCommit[n] /\ b2 \in voteToCommit[n] /\ b # b2 => b.counter # b2.counter
         /\  \neg (VotedToAbort(n, b) /\ b \in voteToCommit[n])
         /\  b \in voteToCommit[n] =>
-            \/  b.counter = 0
+            \/  b.counter = 1
             \/  \E Q \in Quorum :
                 \A m \in Q \ byz : b \in acceptedAborted[m]
             \/  \E cnt \in BallotNumber :
