@@ -10,6 +10,9 @@
 (* safety is guaranteed.                                                              *)
 (**************************************************************************************)
 
+\* TODO: The problem for refinement is that the implementation votes, accepts, confirms many things at once.
+\* So we basically need one big action with everything in it.
+
 EXTENDS Naturals, FiniteSets
 
 CONSTANTS
@@ -43,6 +46,7 @@ VARIABLES
 TypeOK ==
     /\  voteToAbort \in [N -> SUBSET Ballot]
     /\  acceptedAborted \in [N -> SUBSET Ballot]
+    \* TODO confirmedAborted?
     /\  voteToCommit \in [N -> SUBSET Ballot]
     /\  acceptedCommitted \in [N -> SUBSET Ballot]
     /\  externalized \in [N -> SUBSET Ballot]
@@ -99,6 +103,18 @@ Externalize(n, b) ==
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<voteToAbort, acceptedAborted, voteToCommit, acceptedCommitted, byz>>
 
+BigAction(n) ==
+    /\ \E B \in SUBSET Ballot :
+        /\  \A b \in B : \A b2 \in Ballot : LowerAndIncompatible(b2, b) => b2 \notin voteToCommit[n]
+        /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
+    /\  \E B \in SUBSET Ballot :
+        /\  \A b \in B :
+            /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToAbort[m] \cup acceptedAborted[m]
+                \/ \E Bl \in BlockingSets(n) : \A m \in Bl : b \in acceptedAborted[m]
+        /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
+    \* TODO: continue
+    /\  UNCHANGED <<voteToCommit, acceptedCommitted, externalized, byz>>
+
 ByzantineHavoc ==
     /\ \E x \in [byz -> SUBSET Ballot] :
         voteToAbort' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToAbort[n]]
@@ -111,6 +127,7 @@ ByzantineHavoc ==
     /\  UNCHANGED <<externalized, byz>>
 
 Next ==
+    \/ \E n \in N : BigAction(n)
     \/ \E n \in N \ byz, b \in Ballot, B \in SUBSET Ballot :
         \/ VoteToAbort(n, B)
         \/ AcceptAborted(n, B)
