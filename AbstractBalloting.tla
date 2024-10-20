@@ -43,7 +43,7 @@ LowerAndIncompatible(b1, b2) ==
 VARIABLES
     voteToAbort
 ,   acceptedAborted
-,   confirmedAborted
+,   confirmedAborted \* TODO: why do we need this?
 ,   voteToCommit
 ,   acceptedCommitted
 ,   externalized
@@ -68,11 +68,13 @@ Init ==
     /\ byz \in FailProneSet
 
 IsPrepared(n, b1) == 
-        \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b1) => b2 \in confirmedAborted[n]
+        \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b1) => 
+                \E Q \in Quorums(n) : \A m \in Q : b2 \in acceptedAborted[m]
         \/  b1.counter = 1 \* Initially, we can skip the prepare phase
         \/ \E cnt \in BallotNumber : cnt < b1.counter /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
 
 \* All the stuff we can do at once:
+\* TODO: use Q \ byz, Bl \ byz?
 Step(n) ==
     /\ \E B \in SUBSET Ballot :
         /\  \A b \in B : b \notin voteToCommit[n] \/ b \in acceptedAborted[n]
@@ -151,7 +153,8 @@ Invariant ==
                     \A m \in Q \ byz : b \in acceptedCommitted[m]
             /\  b \in voteToCommit[n] =>
                 \/  b.counter = 1
-                \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b) => b2 \in confirmedAborted[n]
+                \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b) =>
+                        \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
                 \/  \E cnt \in BallotNumber :
                     /\  cnt < b.counter
                     /\  [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
