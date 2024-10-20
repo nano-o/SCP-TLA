@@ -63,7 +63,7 @@ Init ==
     /\ byz \in FailProneSet
 
 BallotingConsistencyRules(n) ==
-    /\  voteToCommit[n] \cap voteToAbort[n] = {}
+    /\  \A b \in Ballot : b \in voteToCommit[n] => b \notin voteToAbort[n] \/ b \in acceptedAborted[n]
     /\  \A b1 \in Ballot : b1 \in voteToCommit[n] \cup acceptedCommitted[n] =>
         \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b1) => b2 \in confirmedAborted[n]
         \/  b1.counter = 1 \* Initially, we can skip the prepare phase
@@ -83,7 +83,9 @@ Update(n) ==
                 \A m \in Q : b \in acceptedAborted[m]
         /\  confirmedAborted' = [confirmedAborted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
-        /\  \A b \in B : b.counter > 0 \* we start at ballot 1
+        /\  \A b \in B : 
+            /\  b.counter > 0 \* we start at ballot 1
+            /\  b \notin voteToAbort[n] \cup acceptedAborted[n] \* if the ballot is already aborted, don't vote to commit
         /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup B]
         \* we vote to commit at most one value per ballot number:
         /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
@@ -127,8 +129,9 @@ Invariant ==
     /\  TypeOK
     /\  byz \in FailProneSet
     /\  \A n \in N \ byz :
-        /\  voteToCommit[n] \cap voteToAbort[n] = {}
+        \* /\  voteToCommit[n] \cap voteToAbort[n] = {}
         /\  \A b \in Ballot :
+            /\  b \in voteToCommit[n] => b \notin voteToAbort[n] \/ b \in acceptedAborted[n]
             /\  b \in voteToCommit[n] \cup acceptedCommitted[n] \cup externalized[n] => b.counter > 0
             /\  \A b2 \in Ballot :
                     b \in voteToCommit[n] /\ b2 \in voteToCommit[n] /\ b # b2 => b.counter # b2.counter
@@ -146,6 +149,7 @@ Invariant ==
                 \/  \E cnt \in BallotNumber :
                     /\  cnt < b.counter
                     /\  [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
+            /\  b \in acceptedAborted[n] => \A Q \in Quorum : \E m \in Q \ byz : b \notin voteToCommit[m]
     /\  Safety
 
 ==============================================
