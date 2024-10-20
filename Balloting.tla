@@ -4,8 +4,6 @@
 (* Specification of SCP following the IETF draft. *)
 (**************************************************)
 
-\* TODO: should we use refinement from a more abstract spec that follows the Ivy one? Probably yes.
-
 EXTENDS Integers, FiniteSets
 
 CONSTANTS
@@ -24,11 +22,14 @@ someValue == CHOOSE v \in V : TRUE
 Ballot == [counter : BallotNumber, value : V]
 BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]
 Max(x, y) == IF x > y THEN x ELSE y
+Min(x, y) == IF x < y THEN x ELSE y
 
 \* LessThan predicate for comparing two ballots
 \* @type: ({counter : Int, value : Int}, {counter : Int, value : Int}) => Bool;
 LessThan(b1, b2) ==
     b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value < b2.value)
+LessThanOrEqual(b1, b2) ==
+    b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value <= b2.value)
 LowerAndIncompatible(b1, b2) ==
     LessThan(b1, b2) /\ b1.value # b2.value
 
@@ -57,11 +58,53 @@ SCPExternalize == [
 Message ==
     SCPPrepare \cup SCPCommit \cup SCPExternalize
 
+MessageInvariant(m) ==
+    /\  m.type = "PREPARE" =>
+        /\  m.ballot.counter > 0
+        /\  m.prepared.counter > -1 =>
+            /\  LessThanOrEqual(m.prepared, m.ballot)
+            /\  m.aCounter <= m.prepared.counter
+        /\  m.prepared.counter = -1 => m.aCounter = 0
+        /\  m.cCounter <= m.hCounter
+        /\  m.hCounter <= m.ballot.counter
+
+\* Meaning of the messages in terms of logical, federated-voting messages:
+LogicalMessages(m) ==
+    CASE m.type = "PREPARE" -> [
+            voteToAbort |-> {b \in Ballot :
+                LowerAndIncompatible(b, m.ballot)},
+            acceptedAborted |-> {b \in Ballot :
+                \/ LowerAndIncompatible(b, m.prepared)
+                \/ b.counter < m.aCounter},
+            confirmedAborted |->
+                IF m.hCounter = 0 THEN {}
+                ELSE {b \in Ballot :
+                    LET h == [counter |-> m.hCounter, value |-> m.ballot.value]
+                    IN  LowerAndIncompatible(b, h)},
+            voteToCommit |-> IF m.cCounter = 0 THEN {}
+                ELSE {b \in Ballot :
+                    /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
+                    /\ b.value = m.ballot.value},
+            acceptedCommitted |-> {}]
+    []  m.type = "COMMIT" -> [
+            voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
+            acceptedAborted |-> 
+                LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
+                IN {b \in Ballot : LowerAndIncompatible(b, maxPrepared)},
+            confirmedAborted |->
+                LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
+                IN  {b \in Ballot : LowerAndIncompatible(b, maxPrepared)},
+            voteToCommit |-> {b \in Ballot :
+                m.cCoutner <= b.counter /\ b.value = m.ballot.value},
+            acceptedCommitted |-> {b \in Ballot :
+                /\ m.cCoutner <= b.counter \/ b.counter <= m.hCounter
+                /\ b.value = m.ballot.value}]
+
 VARIABLES
     ballot \* ballot[n] is the current ballot being prepared or committed by node n
 ,   phase  \* phase[n] is the current phase of node n
 ,   prepared \* prepared[n] is the highest accepted-prepared ballot by node n
-,   aCounter \* aCounter[n] is such that all lower ballots are accepted as aborted (TODO: why no value here?)
+,   aCounter \* aCounter[n] is such that all lower ballots are accepted as aborted
     \* depending on the phase, h and c track the highest and lowest confirmed-prepared (in PREPARE), accepted committed (in COMMIT), or confirmed committed (in EXTERNALIZE) ballot
     \* In phase PREPARE, h.value could be different from ballot.value
 ,   h
@@ -93,14 +136,13 @@ ByzStep == \E msgs \in [byz -> SUBSET Message] :
     /\  sent' = [n \in N |-> IF n \notin byz THEN sent[n] ELSE msgs[n]]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
-\* TODO: is it sufficient to consider the latest message from each node? Likely yes.
-
 (*******************************************************************************)
 (* At any point in time, we may increase the ballot counter and set the ballot *)
 (* value to the value of the highest confirmed prepared ballot, if any, or, if *)
 (* none, arbitrarily.                                                          *)
 (*******************************************************************************)
 IncreaseBallotCounter(n, b) ==
+    /\  b > 0
     /\  b > ballot[n].counter
     /\  IF h[n].counter > 0 THEN
             ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> h[n].value]]
@@ -122,28 +164,52 @@ AcceptsPrepared(b, m) ==
             /\  b.value = m.prepared.value
         \/  b.counter < m.aCounter
 
+\* Update what is accepted as prepared:
 AcceptPrepared(n, b) ==
-    /\  LessThan(b, ballot[n])
     /\  LessThan(prepared[n], b)
     /\  \/ \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
         \/ \E B \in BlockingSets(n) : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  prepared' = [prepared EXCEPT ![n] = b]
-    /\  LET m == [
-            type |-> "PREPARE"
-        ,   ballot |-> ballot[n]
-        ,   prepared |-> prepared'[n]
-        ,   aCounter |-> aCounter[n]
-        ,   hCounter |-> Max(h[n].counter,0)
-        ,   cCounter |-> Max(c[n].counter,0)]
-        IN
-            sent' = [sent EXCEPT ![n] = sent[n] \cup {m}]
-    /\  UNCHANGED <<ballot, phase, aCounter, h, c, byz>>
+    /\  IF prepared[n].counter > -1 /\ prepared[n].value # b.value
+        THEN aCounter' = [aCounter EXCEPT ![n] =
+            IF prepared[n].value < b.value
+            THEN prepared[n].counter
+            ELSE prepared[n].counter+1]  
+        ELSE UNCHANGED aCounter
+    /\  IF c[n].counter > -1 /\ (c[n].counter < aCounter[n] \/ LowerAndIncompatible(c[n], prepared[n]))
+        THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
+        ELSE UNCHANGED c
+    /\  UNCHANGED <<ballot, phase, h, sent, byz>>
+
+\* Update what is confirmed as prepared:
+ConfirmPrepared(n, b) ==
+    /\  LessThan(h[n], b)
+    /\  \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
+    /\  h' = [h EXCEPT ![n] = b]
+    /\  IF c[n].counter = -1 /\ b = ballot[n]
+        THEN c' = [c EXCEPT ![n] = b]
+        ELSE UNCHANGED c
+    /\  UNCHANGED <<ballot, phase, prepared, aCounter, sent, byz>>
+
 
 (***************************************************************)
 (* We go to phase COMMIT when we accept a ballot as committed. *)
 (***************************************************************)
 PhaseCommit(n, b) ==
-    TRUE
+    "TODO"
+
+\* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
+SummarizePrepared(n) ==
+    IF LessThanOrEqual(prepared[n], ballot[n])
+    THEN [prepared |-> prepared[n], aCounter |-> aCounter[n]]
+    ELSE
+        IF ballot[n].value > prepared[n].value \/ aCounter[n] > ballot[n].counter
+        THEN [
+            prepared |-> [counter |-> ballot[n].counter, value |-> prepared[n].value],
+            aCounter |-> Min(aCounter[n], ballot[n].counter)]
+        ELSE [
+            prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
+            aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
 
 SendPrepare(n) ==
     /\  ballot[n].counter > 0
@@ -151,10 +217,13 @@ SendPrepare(n) ==
     /\  LET msg == [
             type |-> "PREPARE"
         ,   ballot |-> ballot[n]
-        ,   prepared |-> prepared[n]
-        ,   aCounter |-> aCounter[n]
-        ,   hCounter |-> Max(h[n].counter,0)
-        ,   cCounter |-> Max(c[n].counter,0)]
+        ,   prepared |-> SummarizePrepared(n).prepared
+        ,   aCounter |-> SummarizePrepared(n).aCounter
+        ,   hCounter |->
+                IF h[n].counter > -1 /\ h[n].value = ballot[n].value
+                THEN h[n].counter
+                ELSE 0
+        ,   cCounter |-> Max(c[n].counter, 0)]
         IN 
             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
@@ -186,7 +255,9 @@ Next ==
     \/ \E n \in N \ byz :
         \/ \E cnt \in BallotNumber : IncreaseBallotCounter(n, cnt)
         \/ SendPrepare(n)
-        \/ \E b \in Ballot : AcceptPrepared(n, b)
+        \/ \E b \in Ballot :
+            \/  AcceptPrepared(n, b)
+            \/  ConfirmPrepared(n, b)
         \* \/ SendCommit(n)
         \* \/ SendExternalize(n)
 
@@ -195,29 +266,23 @@ vars == <<ballot, phase, prepared, aCounter, h, c, sent, byz>>
 Spec ==
     Init /\ [][Next]_vars
 
-\* Meaning of the messages in terms of federated voting:
-HighLevelMessages(m) ==
-    CASE m.type = "PREPARE" -> [
-        voteToAbort |-> {b \in Ballot :
-            LowerAndIncompatible(b, m.ballot)},
-        acceptedAborted |-> {b \in Ballot :
-            \/ LowerAndIncompatible(b, m.prepared)
-            \/ b.counter < m.aCounter},
-        voteToCommit |-> {},
-        acceptedCommitted |-> {}]
-    []  m.type = "COMMIT" -> [
-        voteToAbort |-> {},
-        acceptedAborted |-> {},
-        voteToCommit |-> {},
-        acceptedCommitted |-> {}]
+Invariant ==
+    /\  TypeOK
+    /\  \A n \in N \ byz :
+        /\  \A m \in sent[n] : MessageInvariant(m)
+        /\  ballot[n].counter = -1 \/ ballot[n].counter > 0
+        /\  prepared[n].counter > -1 => aCounter[n] <= prepared[n].counter
+        /\  prepared[n].counter = -1 => aCounter[n] = 0
+        /\  c[n].counter <= h[n].counter
+        /\  c[n].counter = -1 \/ c[n].counter > 0
 
 \* Next we instantiate the AbstractBalloting specification
 
-voteToAbort == [n \in N |-> UNION {HighLevelMessages(m).voteToAbort : m \in sent[n]}]
-acceptedAborted == [n \in N |-> UNION {HighLevelMessages(m).acceptedAborted : m \in sent[n]}]
-confirmedAborted == [n \in N |-> {}]
-voteToCommit == [n \in N |-> {}]
-acceptedCommitted == [n \in N |-> {}]
+voteToAbort == [n \in N |-> UNION {LogicalMessages(m).voteToAbort : m \in sent[n]}]
+acceptedAborted == [n \in N |-> UNION {LogicalMessages(m).acceptedAborted : m \in sent[n]}]
+confirmedAborted == [n \in N |-> UNION {LogicalMessages(m).confirmedAborted : m \in sent[n]}]
+voteToCommit == [n \in N |-> UNION {LogicalMessages(m).voteToCommit : m \in sent[n]}]
+acceptedCommitted == [n \in N |-> UNION {LogicalMessages(m).acceptedCommitted : m \in sent[n]}]
 externalized == [n \in N |-> {}]
 
 AB == INSTANCE AbstractBalloting
