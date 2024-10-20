@@ -181,7 +181,7 @@ SendExternalize(n) ==
             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
-Next == 
+Next ==
     \/ ByzStep
     \/ \E n \in N \ byz :
         \/ \E cnt \in BallotNumber : IncreaseBallotCounter(n, cnt)
@@ -195,17 +195,27 @@ vars == <<ballot, phase, prepared, aCounter, h, c, sent, byz>>
 Spec ==
     Init /\ [][Next]_vars
 
+\* Meaning of the messages in terms of federated voting:
+HighLevelMessages(m) ==
+    CASE m.type = "PREPARE" -> [
+        voteToAbort |-> {b \in Ballot :
+            LowerAndIncompatible(b, m.ballot)},
+        acceptedAborted |-> {b \in Ballot :
+            \/ LowerAndIncompatible(b, m.prepared)
+            \/ b.counter < m.aCounter},
+        voteToCommit |-> {},
+        acceptedCommitted |-> {}]
+    []  m.type = "COMMIT" -> [
+        voteToAbort |-> {},
+        acceptedAborted |-> {},
+        voteToCommit |-> {},
+        acceptedCommitted |-> {}]
+
 \* Next we instantiate the AbstractBalloting specification
 
-VoteToAbort(n) == {b \in Ballot :
-    LessThan(b, ballot[n])}
-
-AcceptedAborted(n) == {b \in Ballot : \E m \in sent[n] :
-    /\  m.type = "PREPARE"
-    /\  LessThan(b, m.prepared)}
-
-voteToAbort == [n \in N |-> VoteToAbort(n)]
-acceptedAborted == [n \in N |-> {}]
+voteToAbort == [n \in N |-> UNION {HighLevelMessages(m).voteToAbort : m \in sent[n]}]
+acceptedAborted == [n \in N |-> UNION {HighLevelMessages(m).acceptedAborted : m \in sent[n]}]
+confirmedAborted == [n \in N |-> {}]
 voteToCommit == [n \in N |-> {}]
 acceptedCommitted == [n \in N |-> {}]
 externalized == [n \in N |-> {}]
