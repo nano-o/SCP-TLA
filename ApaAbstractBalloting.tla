@@ -14,8 +14,6 @@ VARIABLES
     \* @type: NODE -> Set($ballot);
     acceptedAborted,
     \* @type: NODE -> Set($ballot);
-    confirmedAborted,
-    \* @type: NODE -> Set($ballot);
     voteToCommit,
     \* @type: NODE -> Set($ballot);
     acceptedCommitted,

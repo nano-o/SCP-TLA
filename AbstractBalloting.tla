@@ -43,7 +43,6 @@ LowerAndIncompatible(b1, b2) ==
 VARIABLES
     voteToAbort
 ,   acceptedAborted
-,   confirmedAborted \* TODO: why do we need this?
 ,   voteToCommit
 ,   acceptedCommitted
 ,   externalized
@@ -52,7 +51,6 @@ VARIABLES
 TypeOK ==
     /\  voteToAbort \in [N -> SUBSET Ballot]
     /\  acceptedAborted \in [N -> SUBSET Ballot]
-    /\  confirmedAborted \in [N -> SUBSET Ballot]
     /\  voteToCommit \in [N -> SUBSET Ballot]
     /\  acceptedCommitted \in [N -> SUBSET Ballot]
     /\  externalized \in [N -> SUBSET Ballot]
@@ -61,7 +59,6 @@ TypeOK ==
 Init ==
     /\ voteToAbort = [n \in N |-> {}]
     /\ acceptedAborted = [n \in N |-> {}]
-    /\ confirmedAborted = [n \in N |-> {}]
     /\ voteToCommit = [n \in N |-> {}]
     /\ acceptedCommitted = [n \in N |-> {}]
     /\ externalized = [n \in N |-> {}]
@@ -84,10 +81,6 @@ Step(n) ==
             /\  \/ \E Q \in Quorums(n) : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
                 \/ \E Bl \in BlockingSets(n) : \A m \in Bl \ byz : b \in acceptedAborted[m]
         /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
-    /\  \E B \in SUBSET Ballot :
-        /\  \A b \in B : \E Q \in Quorums(n) :
-                \A m \in Q \ byz : b \in acceptedAborted[m]
-        /\  confirmedAborted' = [confirmedAborted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : 
             /\  b.counter > 0 \* we start at ballot 1
@@ -118,13 +111,13 @@ ByzantineHavoc ==
         voteToCommit' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToCommit[n]]
     /\ \E x \in [byz -> SUBSET Ballot] :
         acceptedCommitted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedCommitted[n]]
-    /\  UNCHANGED <<confirmedAborted, externalized, byz>>
+    /\  UNCHANGED <<externalized, byz>>
 
 Next ==
     \/ \E n \in N : Step(n)
     \/  ByzantineHavoc
 
-vars == <<voteToAbort, acceptedAborted, confirmedAborted, voteToCommit, acceptedCommitted, externalized, byz>>
+vars == <<voteToAbort, acceptedAborted, voteToCommit, acceptedCommitted, externalized, byz>>
 
 Spec == Init /\ [][Next]_vars
 
@@ -144,8 +137,6 @@ Invariant ==
                     b \in voteToCommit[n] /\ b2 \in voteToCommit[n] /\ b # b2 => b.counter # b2.counter
             /\  b \in acceptedAborted[n] => \E Q \in Quorum :
                     \A m \in Q \ byz : b \in voteToAbort[m]
-            /\  b \in confirmedAborted[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in acceptedAborted[m]
             /\  b \in acceptedCommitted[n] => \E Q \in Quorum :
                     \A m \in Q \ byz : b \in voteToCommit[m]
             /\  b \in externalized[n] => \E Q \in Quorum :
