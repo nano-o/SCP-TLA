@@ -65,7 +65,7 @@ LogicalMessages(m) ==
             acceptedCommitted |-> {}]
     []  m.type = "COMMIT" -> [
             voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
-            acceptedAborted |-> 
+            acceptedAborted |->
                 LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
                 IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
             confirmedAborted |->
@@ -74,7 +74,7 @@ LogicalMessages(m) ==
             voteToCommit |-> {b \in Ballot :
                 m.cCounter <= b.counter /\ b.value = m.ballot.value},
             acceptedCommitted |-> {b \in Ballot :
-                /\ m.cCounter <= b.counter \/ b.counter <= m.hCounter
+                /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
                 /\ b.value = m.ballot.value}]
 
 VARIABLES
