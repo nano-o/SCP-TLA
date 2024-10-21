@@ -18,27 +18,7 @@
 (* it is necessary for liveness to allow this.                                        *)
 (**************************************************************************************)
 
-EXTENDS Naturals, FiniteSets
-
-CONSTANTS
-    N \* nodes
-,   V \* values (the goal of the protocol is to agree on a value)
-,   BallotNumber \* the set of ballot numbers (i.e. the integers)
-,   Quorum
-,   FailProneSet
-
-Quorums(n) == Quorum
-BlockingSets(n) == {B \in SUBSET N :
-    \A Q \in Quorum : Q \cap B # {}}
-
-Ballot == [counter : BallotNumber, value : V]
-
-\* LessThan predicate for comparing two ballots
-\* @type: ({counter : Int, value : Int}, {counter : Int, value : Int}) => Bool;
-LessThan(b1, b2) ==
-    b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value < b2.value)
-LowerAndIncompatible(b1, b2) ==
-    LessThan(b1, b2) /\ b1.value # b2.value
+EXTENDS DomainModel
 
 VARIABLES
     voteToAbort
@@ -65,21 +45,19 @@ Init ==
     /\ byz \in FailProneSet
 
 IsPrepared(n, b1) == 
-        \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b1) => 
-                \E Q \in Quorums(n) : \A m \in Q \ byz : b2 \in acceptedAborted[m]
+        \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b1) => 
+                \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
         \/  b1.counter = 1 \* Initially, we can skip the prepare phase
         \/ \E cnt \in BallotNumber : cnt < b1.counter /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
 
-\* All the stuff we can do at once:
-\* TODO: use Q \ byz, Bl \ byz?
 Step(n) ==
     /\ \E B \in SUBSET Ballot :
         /\  \A b \in B : b \notin voteToCommit[n] \/ b \in acceptedAborted[n]
         /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorums(n) : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
-                \/ \E Bl \in BlockingSets(n) : \A m \in Bl \ byz : b \in acceptedAborted[m]
+            /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
+                \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedAborted[m]
         /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : 
@@ -92,12 +70,12 @@ Step(n) ==
         /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorums(n) : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
-                \/ \E Bl \in BlockingSets(n) : \A m \in Bl \ byz : b \in acceptedCommitted[m]
-            /\  IsPrepared(n, b)
+            /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
+                \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedCommitted[m]
+            \* /\  IsPrepared(n, b) \* TODO needed?
         /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
-        /\  \A b \in B : \E Q \in Quorums(n) :
+        /\  \A b \in B : \E Q \in Quorum :
                 \A m \in Q \ byz : b \in acceptedCommitted[m]
         /\  externalized' = [externalized EXCEPT ![n] = @ \cup B]
     /\  UNCHANGED <<byz>>
@@ -143,7 +121,7 @@ Invariant ==
                     \A m \in Q \ byz : b \in acceptedCommitted[m]
             /\  b \in voteToCommit[n] =>
                 \/  b.counter = 1
-                \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b) =>
+                \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) =>
                         \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
                 \/  \E cnt \in BallotNumber :
                     /\  cnt < b.counter

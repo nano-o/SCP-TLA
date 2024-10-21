@@ -4,35 +4,7 @@
 (* Specification of SCP following the IETF draft. *)
 (**************************************************)
 
-EXTENDS Integers, FiniteSets
-
-CONSTANTS
-    N \* nodes
-,   V \* values (the goal of the protocol is to agree on a value)
-,   BallotNumber \* the set of ballot numbers (i.e. the integers)
-,   Quorum
-,   FailProneSet
-
-\* ASSUME \E n \in Nat : BallotNumber = 0..n
-
-Quorums(n) == Quorum
-BlockingSets(n) == {B \in SUBSET N :
-    \A Q \in Quorum : Q \cap B # {}}
-someValue == CHOOSE v \in V : TRUE
-Ballot == [counter : BallotNumber, value : V]
-NullBallot == [counter |-> -1, value |-> someValue]
-BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]
-Max(x, y) == IF x > y THEN x ELSE y
-Min(x, y) == IF x < y THEN x ELSE y
-
-\* LessThan predicate for comparing two ballots
-\* @type: ({counter : Int, value : Int}, {counter : Int, value : Int}) => Bool;
-LessThan(b1, b2) ==
-    b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value < b2.value)
-LessThanOrEqual(b1, b2) ==
-    b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value <= b2.value)
-LowerAndIncompatible(b1, b2) ==
-    LessThan(b1, b2) /\ b1.value # b2.value
+EXTENDS DomainModel
 
 Phase == {"PREPARE", "COMMIT", "EXTERNALIZE"}
 
@@ -63,25 +35,29 @@ MessageInvariant(m) ==
     /\  m.type = "PREPARE" =>
         /\  m.ballot.counter > 0
         /\  m.prepared.counter > -1 =>
-            /\  LessThanOrEqual(m.prepared, m.ballot)
+            /\  m.prepared \preceq m.ballot
             /\  m.aCounter <= m.prepared.counter
         /\  m.prepared.counter = -1 => m.aCounter = 0
         /\  m.cCounter <= m.hCounter
         \* /\  m.hCounter <= m.ballot.counter \* TODO: why this (note it's explicitely mentioned on Page 13)? I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
+    /\  m.type = "COMMIT" =>
+        /\  m.cCounter > 0
+        /\  m.cCounter <= m.ballot.counter
+        /\  m.cCounter <= m.hCounter
 
 \* Meaning of the messages in terms of logical, federated-voting messages:
 LogicalMessages(m) ==
     CASE m.type = "PREPARE" -> [
             voteToAbort |-> {b \in Ballot :
-                LowerAndIncompatible(b, m.ballot)},
+                LessThanAndIncompatible(b, m.ballot)},
             acceptedAborted |-> {b \in Ballot :
-                \/ LowerAndIncompatible(b, m.prepared)
+                \/ LessThanAndIncompatible(b, m.prepared)
                 \/ b.counter < m.aCounter},
             confirmedAborted |->
                 IF m.hCounter = 0 THEN {}
                 ELSE {b \in Ballot :
                     LET h == [counter |-> m.hCounter, value |-> m.ballot.value]
-                    IN  LowerAndIncompatible(b, h)},
+                    IN  LessThanAndIncompatible(b, h)},
             voteToCommit |-> IF m.cCounter = 0 THEN {}
                 ELSE {b \in Ballot :
                     /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
@@ -91,10 +67,10 @@ LogicalMessages(m) ==
             voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
             acceptedAborted |-> 
                 LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
-                IN {b \in Ballot : LowerAndIncompatible(b, maxPrepared)},
+                IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
             confirmedAborted |->
                 LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
-                IN  {b \in Ballot : LowerAndIncompatible(b, maxPrepared)},
+                IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
             voteToCommit |-> {b \in Ballot :
                 m.cCoutner <= b.counter /\ b.value = m.ballot.value},
             acceptedCommitted |-> {b \in Ballot :
@@ -168,10 +144,10 @@ AcceptsPrepared(b, m) ==
 \* whether b is aborted given aCounter and prepared:
 Aborted(b, a, p) ==
     \/  b.counter < a
-    \/  LowerAndIncompatible(b, p)
+    \/  LessThanAndIncompatible(b, p)
 
 \* update prepared, aCounter, and c given a new accepted-prepared ballot
-\* assumes LessThan(prepared[n], b)
+\* assumes prepared[n] \preceq b
 UpdatePrepared(n, b) ==
     /\  prepared' = [prepared EXCEPT ![n] = b]
     /\  IF prepared[n].counter > -1 /\ prepared[n].value # b.value
@@ -186,23 +162,22 @@ UpdatePrepared(n, b) ==
     
 \* Update what is accepted as prepared:
 AcceptPrepared(n, b) ==
-    /\  LessThan(prepared[n], b)
-    /\  \/ \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
-        \/ \E B \in BlockingSets(n) : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
+    /\  phase = "PREPARE"
+    /\  prepared[n] \prec b
+    /\  \/ \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
+        \/ \E B \in BlockingSet : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  UpdatePrepared(n, b)
     /\  UNCHANGED <<ballot, phase, h, sent, byz>>
 
 \* Update what is confirmed as prepared:
 ConfirmPrepared(n, b) ==
-    /\  LessThan(h[n], b)
-    /\  \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
+    /\  phase = "PREPARE"
+    /\  h[n] \prec b
+    /\  \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
-    /\  IF LessThan(prepared[n], b) \* confirmed prepared implies accepted prepared
+    /\  IF prepared[n] \prec b \* confirmed prepared implies accepted prepared
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter, c>>
-    /\  UNCHANGED <<ballot, phase, sent, byz>>
-    \* TODO: update ballot? Would help reduce the reachable state space
-
 (***************************************************************)
 (* We go to phase COMMIT when we accept a ballot as committed. *)
 (***************************************************************)
@@ -211,7 +186,7 @@ PhaseCommit(n, b) ==
 
 \* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
 SummarizePrepared(n) ==
-    IF LessThanOrEqual(prepared[n], ballot[n])
+    IF prepared[n] \preceq ballot[n]
     THEN [prepared |-> prepared[n], aCounter |-> aCounter[n]]
     ELSE
         IF ballot[n].value > prepared[n].value \/ aCounter[n] > ballot[n].counter
@@ -284,7 +259,7 @@ Invariant ==
         /\  ballot[n].counter = -1 \/ ballot[n].counter > 0
         /\  prepared[n].counter > -1 => aCounter[n] <= prepared[n].counter
         /\  prepared[n].counter = -1 => aCounter[n] = 0
-        /\  LessThanOrEqual(h[n], prepared[n])
+        /\  h[n] \preceq prepared[n]
         /\  c[n].counter = -1 \/ c[n].counter > 0
         /\  c[n].counter <= h[n].counter
         /\  c[n].counter <= ballot[n].counter
@@ -292,7 +267,7 @@ Invariant ==
                 /\  c[n].value = h[n].value
                 /\  c[n].value = prepared[n].value
                 /\  c[n].value = ballot[n].value
-        /\  LessThanOrEqual(h[n], prepared[n])
+        /\  h[n] \preceq prepared[n]
 
 \* Next we instantiate the AbstractBalloting specification
 
