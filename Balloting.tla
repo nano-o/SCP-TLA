@@ -72,9 +72,9 @@ LogicalMessages(m) ==
                 LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
                 IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
             voteToCommit |-> {b \in Ballot :
-                m.cCoutner <= b.counter /\ b.value = m.ballot.value},
+                m.cCounter <= b.counter /\ b.value = m.ballot.value},
             acceptedCommitted |-> {b \in Ballot :
-                /\ m.cCoutner <= b.counter \/ b.counter <= m.hCounter
+                /\ m.cCounter <= b.counter \/ b.counter <= m.hCounter
                 /\ b.value = m.ballot.value}]
 
 VARIABLES
@@ -218,6 +218,7 @@ AcceptsCommitted(b, m) ==
     /\  b.counter <= m.hCounter
 
 AcceptCommitted(n, b) ==
+    /\  b = ballot[n] \* TODO okay?
     /\  IF phase[n] = "PREPARE"
         THEN phase' = [phase EXCEPT ![n] = "COMMIT"] /\ c' = [c EXCEPT ![n] = b]
         ELSE UNCHANGED <<phase, c>>
