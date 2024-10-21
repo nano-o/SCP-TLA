@@ -17,3 +17,11 @@ Best viewed or edited with the [quint extention for VS Code](https://marketplace
 Use the [quint REPL](https://github.com/informalsystems/quint/blob/main/tutorials/repl/repl.md) to run tests and random simulations.
 For example, on my setup I can run `npx quint -r Nomination.qnt::Test`, which loads the Test module and starts the quint REPL. Then I can run `run1` (in the REPL), which prints `true` (which means `run1` is a valid behavior of the specification). Finally I can run (again in the REPL) `stateAsRecord` to print all the variables in the state reached at the end of `run1`.
 
+# The balloting protocol
+
+[`AbstractBalloting.tla`](AbstractBalloting.tla) contains a high-level specification of SCP's balloting protocol in terms of logical federate-voting messages.
+It will be useful to prove that the concrete balloting protocol is correct by refinement.
+
+
+[`Balloting.tla`](Balloting.tla) will eventually contain a specification of the concrete balloting protocol.
+For now, it is work in progress.

@@ -16,9 +16,6 @@ $(TLC_JAR):
 # Don't redownload stuff every time
 .PRECIOUS: $(APA) $(TLC_JAR)
 
-semiabstractballoting-safety: $(APA)
-	APA=$(APA) ./check.sh -inductive Invariant SemiAbstractBalloting
-
 abstractballoting-safety: $(APA)
 	APA=$(APA) ./check.sh -inductive Invariant AbstractBalloting
 
