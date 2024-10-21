@@ -67,7 +67,7 @@ MessageInvariant(m) ==
             /\  m.aCounter <= m.prepared.counter
         /\  m.prepared.counter = -1 => m.aCounter = 0
         /\  m.cCounter <= m.hCounter
-        /\  m.hCounter <= m.ballot.counter
+        \* /\  m.hCounter <= m.ballot.counter \* TODO: why this (note it's explicitely mentioned on Page 13)? I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
 
 \* Meaning of the messages in terms of logical, federated-voting messages:
 LogicalMessages(m) ==
@@ -201,6 +201,7 @@ ConfirmPrepared(n, b) ==
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter, c>>
     /\  UNCHANGED <<ballot, phase, sent, byz>>
+    \* TODO: update ballot? Would help reduce the reachable state space
 
 (***************************************************************)
 (* We go to phase COMMIT when we accept a ballot as committed. *)
