@@ -125,28 +125,38 @@ IncreaseBallotCounter(n, b) ==
             ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> h[n].value]]
         ELSE
             \E v \in V : ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> v]]
+    \* TODO: optimization:
+    \* /\  IF b = 1
+    \*     THEN c' = [c EXCEPT ![n] = ballot'[n]]
+    \*     ELSE UNCHANGED c
     /\ UNCHANGED <<phase, prepared, aCounter, h, c, sent, byz>>
 
 VotesToPrepare(b, m) ==
-    /\  m.type = "PREPARE"
-    /\  \/  /\  b.counter <= m.ballot.counter
-            /\  b.value = m.ballot.value
-        \/  /\  b.counter <= m.prepared.counter
-            /\  b.value = m.prepared.value
-        \/  b.counter < m.aCounter
+    \/  /\  m.type = "PREPARE"
+        /\  \/  /\  b.counter <= m.ballot.counter
+                /\  b.value = m.ballot.value
+            \/  /\  b.counter <= m.prepared.counter
+                /\  b.value = m.prepared.value
+            \/  b.counter < m.aCounter
+    \/  /\  m.type = "COMMIT"
+        /\  b.counter <= m.preparedCounter
+        /\  b.value = m.ballot.value
 
 AcceptsPrepared(b, m) ==
-    /\  m.type = "PREPARE"
-    /\  \/  /\  b.counter <= m.prepared.counter
-            /\  b.value = m.prepared.value
-        \/  b.counter < m.aCounter
+    \/  /\  m.type = "PREPARE"
+        /\  \/  /\  b.counter <= m.prepared.counter
+                /\  b.value = m.prepared.value
+            \/  b.counter < m.aCounter
+    \/  /\  m.type = "COMMIT"
+        /\  b.counter <= m.preparedCounter
+        /\  b.value = m.ballot.value
 
 \* whether b is aborted given aCounter and prepared:
 Aborted(b, a, p) ==
     \/  b.counter < a
     \/  LessThanAndIncompatible(b, p)
 
-\* update prepared, aCounter, and c given a new accepted-prepared ballot
+\* update prepared and aCounter given a new accepted-prepared ballot
 \* assumes prepared[n] \preceq b
 UpdatePrepared(n, b) ==
     /\  prepared' = [prepared EXCEPT ![n] = b]
@@ -154,35 +164,68 @@ UpdatePrepared(n, b) ==
         THEN aCounter' = [aCounter EXCEPT ![n] =
             IF prepared[n].value < b.value
             THEN prepared[n].counter
-            ELSE prepared[n].counter+1]  
+            ELSE prepared[n].counter+1]
         ELSE UNCHANGED aCounter
-    /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
-        THEN c' = [c EXCEPT ![n] = NullBallot]
-        ELSE UNCHANGED c
     
 \* Update what is accepted as prepared:
 AcceptPrepared(n, b) ==
-    /\  phase = "PREPARE"
     /\  prepared[n] \prec b
     /\  \/ \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
         \/ \E B \in BlockingSet : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  UpdatePrepared(n, b)
+    \* Reset c to NullBallot if it has been aborted:
+    /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
+        THEN c' = [c EXCEPT ![n] = NullBallot]
+        ELSE UNCHANGED c
     /\  UNCHANGED <<ballot, phase, h, sent, byz>>
 
 \* Update what is confirmed as prepared:
 ConfirmPrepared(n, b) ==
-    /\  phase = "PREPARE"
     /\  h[n] \prec b
     /\  \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
     /\  IF prepared[n] \prec b \* confirmed prepared implies accepted prepared
         THEN UpdatePrepared(n, b)
-        ELSE UNCHANGED <<prepared, aCounter, c>>
-(***************************************************************)
-(* We go to phase COMMIT when we accept a ballot as committed. *)
-(***************************************************************)
-PhaseCommit(n, b) ==
-    "TODO"
+        ELSE UNCHANGED <<prepared, aCounter>>
+    \* Update c (either reset to NullBallot, if it has been aborted, or set it to b):
+    /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
+        THEN c' = [c EXCEPT ![n] = NullBallot]
+        ELSE
+            IF  /\  c[n].counter = -1
+                /\  b = ballot[n]
+                /\  \neg Aborted(b, aCounter'[n], prepared'[n])
+            THEN c' = [c EXCEPT ![n] = b]
+            ELSE UNCHANGED c
+    /\  IF b.counter > 0
+        THEN ballot' = [ballot EXCEPT ![n] = b] \* not strictly necessary, but might help curb the statespace
+        ELSE UNCHANGED ballot
+    /\  UNCHANGED <<phase, sent, byz>>
+
+VotesToCommit(b, m) ==
+    \/  /\  m.type = "PREPARE"
+        /\  m.cCounter > 0
+        /\  m.cCounter <= b.counter
+        /\  b.counter <= m.hCounter
+        /\  b.value = m.ballot.value
+    \/  /\  m.type = "COMMIT"
+        /\  m.cCounter <= b.counter
+        /\  b.value = m.ballot.value
+
+AcceptsCommitted(b, m) ==
+    /\  m.type = "COMMIT"
+    /\  b.value = m.ballot.value
+    /\  m.cCounter <= b.counter
+    /\  b.counter <= m.hCounter
+
+AcceptCommitted(n, b) ==
+    /\  IF phase[n] = "PREPARE"
+        THEN phase' = [phase EXCEPT ![n] = "COMMIT"] /\ c' = [c EXCEPT ![n] = b]
+        ELSE UNCHANGED <<phase, c>>
+    /\  phase[n] = "COMMIT" => h[n] \prec b
+    /\  \/ \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : VotesToCommit(b, msg)
+        \/ \E B \in BlockingSet : \A m \in B : \E msg \in sent[m] : AcceptsCommitted(b, msg)
+    /\  h' = [h EXCEPT ![n] = b]
+    /\  UNCHANGED <<ballot, prepared, aCounter, sent, byz>>
 
 \* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
 SummarizePrepared(n) ==
@@ -240,11 +283,12 @@ Next ==
     \/ ByzStep
     \/ \E n \in N \ byz :
         \/ \E cnt \in BallotNumber : IncreaseBallotCounter(n, cnt)
-        \/ SendPrepare(n)
         \/ \E b \in Ballot :
             \/  AcceptPrepared(n, b)
             \/  ConfirmPrepared(n, b)
-        \* \/ SendCommit(n)
+            \/  AcceptCommitted(n, b)
+        \/ SendPrepare(n)
+        \/ SendCommit(n)
         \* \/ SendExternalize(n)
 
 vars == <<ballot, phase, prepared, aCounter, h, c, sent, byz>>
@@ -267,7 +311,6 @@ Invariant ==
                 /\  c[n].value = h[n].value
                 /\  c[n].value = prepared[n].value
                 /\  c[n].value = ballot[n].value
-        /\  h[n] \preceq prepared[n]
 
 \* Next we instantiate the AbstractBalloting specification
 
@@ -289,4 +332,16 @@ InitRefinement ==
 NextRefinement ==
     [][Next => AB!Next]_vars
 
+\* Canaries
+Canary1 == \neg (
+    \E n \in N \ byz : phase[n] = "COMMIT"
+)
+Canary2 == \neg (
+    \E n \in N \ byz : \E msg \in sent[n] :
+        /\  msg.type = "PREPARE"
+        /\  msg.cCounter = 1
+)
+Canary3 == \neg (
+    \E Q \in Quorum : \A n \in Q \ byz : c[n].counter = 1
+)
 =============================================================================
