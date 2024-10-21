@@ -59,20 +59,21 @@ Step(n) ==
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
                 \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedAborted[m]
         /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
-    /\  \E B \in SUBSET Ballot :
-        /\  \A b \in B : 
-            /\  b.counter > 0 \* we start at ballot 1
-             \* if the ballot is already aborted, don't vote to commit (using the primed version ensures we don't vote to commit and abort at the same time):
-            /\  b \notin voteToAbort'[n] \cup acceptedAborted'[n]
-            /\  IsPrepared(n, b)
-        /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup B]
-        \* we vote to commit at most one value per ballot number:
-        /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
+    \* NOTE we must update acceptedCommitted before voteToCommit because updating voteToCommit depends on acceptedCommitted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
                 \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedCommitted[m]
         /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
+    /\  \E B \in SUBSET Ballot :
+        /\  \A b \in B : 
+            /\  b.counter > 0 \* we start at ballot 1
+             \* if the ballot is already aborted, don't vote to commit (using the primed version ensures we don't vote to commit and abort at the same time):
+            /\  b \notin voteToAbort'[n] \cup acceptedAborted'[n]
+            /\  IsPrepared(n, b)'
+        /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup B]
+        \* we vote to commit at most one value per ballot number:
+        /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : \E Q \in Quorum :
                 \A m \in Q \ byz : b \in acceptedCommitted[m]
