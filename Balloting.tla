@@ -196,7 +196,7 @@ ConfirmPrepared(n, b) ==
                 /\  \neg Aborted(b, aCounter'[n], prepared'[n])
             THEN c' = [c EXCEPT ![n] = b]
             ELSE UNCHANGED c
-    /\  IF b.counter > 0
+    /\  IF b.counter > 0 /\ ballot[n] \prec b
         THEN ballot' = [ballot EXCEPT ![n] = b] \* not strictly necessary, but might help curb the statespace
         ELSE UNCHANGED ballot
     /\  UNCHANGED <<phase, sent, byz>>
@@ -226,7 +226,10 @@ AcceptCommitted(n, b) ==
     /\  \/ \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : VotesToCommit(b, msg)
         \/ \E B \in BlockingSet : \A m \in B : \E msg \in sent[m] : AcceptsCommitted(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
-    /\  UNCHANGED <<ballot, prepared, aCounter, sent, byz>>
+    /\  IF prepared[n] \prec b \* accepted committed implies accepted prepared
+        THEN UpdatePrepared(n, b)
+        ELSE UNCHANGED <<prepared, aCounter>>
+    /\  UNCHANGED <<ballot, sent, byz>>
 
 \* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
 SummarizePrepared(n) ==
