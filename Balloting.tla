@@ -176,17 +176,23 @@ AcceptPrepared(n, b) ==
             THEN prepared[n].counter
             ELSE prepared[n].counter+1]  
         ELSE UNCHANGED aCounter
-    /\  IF c[n].counter > -1 /\ (c[n].counter < aCounter[n] \/ LowerAndIncompatible(c[n], prepared[n]))
+    /\  IF c[n].counter > -1 /\ (c[n].counter < aCounter[n] \/ LowerAndIncompatible(c[n], prepared'[n]))
         THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
         ELSE UNCHANGED c
     /\  UNCHANGED <<ballot, phase, h, sent, byz>>
+    
+Aborted(n, b) ==
+    \/  b.counter < aCounter[n]
+    \/  LowerAndIncompatible(b, prepared[n])
 
 \* Update what is confirmed as prepared:
 ConfirmPrepared(n, b) ==
     /\  LessThan(h[n], b)
     /\  \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
-    /\  IF c[n].counter = -1 /\ b = ballot[n]
+    /\  IF  /\ c[n].counter = -1 
+            /\ b = ballot[n]
+            /\ \neg Aborted(n, b)
         THEN c' = [c EXCEPT ![n] = b]
         ELSE UNCHANGED c
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, sent, byz>>
