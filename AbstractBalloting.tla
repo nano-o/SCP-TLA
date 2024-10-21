@@ -72,7 +72,6 @@ Step(n) ==
         /\  \A b \in B :
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
                 \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedCommitted[m]
-            \* /\  IsPrepared(n, b) \* TODO needed?
         /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : \E Q \in Quorum :
