@@ -163,6 +163,10 @@ AcceptsPrepared(b, m) ==
     /\  \/  /\  b.counter <= m.prepared.counter
             /\  b.value = m.prepared.value
         \/  b.counter < m.aCounter
+    
+Aborted(n, b) ==
+    \/  b.counter < aCounter[n]
+    \/  LowerAndIncompatible(b, prepared[n])
 
 \* Update what is accepted as prepared:
 AcceptPrepared(n, b) ==
@@ -176,24 +180,29 @@ AcceptPrepared(n, b) ==
             THEN prepared[n].counter
             ELSE prepared[n].counter+1]  
         ELSE UNCHANGED aCounter
-    /\  IF c[n].counter > -1 /\ (c[n].counter < aCounter[n] \/ LowerAndIncompatible(c[n], prepared'[n]))
+    /\  IF c[n].counter > -1 /\ Aborted(n, c[n])'
         THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
         ELSE UNCHANGED c
     /\  UNCHANGED <<ballot, phase, h, sent, byz>>
-    
-Aborted(n, b) ==
-    \/  b.counter < aCounter[n]
-    \/  LowerAndIncompatible(b, prepared[n])
 
 \* Update what is confirmed as prepared:
 ConfirmPrepared(n, b) ==
     /\  LessThan(h[n], b)
     /\  \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
-    /\  IF c[n].counter = -1 /\ b = ballot[n] /\ \neg Aborted(n, b)
-        THEN c' = [c EXCEPT ![n] = b]
-        ELSE UNCHANGED c
-    /\  UNCHANGED <<ballot, phase, prepared, aCounter, sent, byz>>
+    /\  IF LessThan(prepared[n], b) \* confirmed prepared implies accepted prepared
+        THEN prepared' = [prepared EXCEPT ![n] = b]
+        ELSE UNCHANGED prepared
+    /\  IF c[n].counter = -1
+        THEN
+            IF b = ballot[n] /\ \neg Aborted(n, b)
+            THEN c' = [c EXCEPT ![n] = b]
+            ELSE UNCHANGED c
+        ELSE
+            IF Aborted(n, c[n])'
+            THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
+            ELSE UNCHANGED c
+    /\  UNCHANGED <<ballot, phase, aCounter, sent, byz>>
 
 (***************************************************************)
 (* We go to phase COMMIT when we accept a ballot as committed. *)
@@ -278,6 +287,8 @@ Invariant ==
         /\  prepared[n].counter = -1 => aCounter[n] = 0
         /\  c[n].counter <= h[n].counter
         /\  c[n].counter = -1 \/ c[n].counter > 0
+        /\  c[n].counter > 0 => c[n].value = h[n].value /\ c[n].value = prepared[n].value
+        /\  LessThan(h[n], prepared[n])
 
 \* Next we instantiate the AbstractBalloting specification
 
