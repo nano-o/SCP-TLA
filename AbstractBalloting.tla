@@ -69,7 +69,7 @@ Init ==
 
 IsPrepared(n, b1) == 
         \/  \A b2 \in Ballot : LowerAndIncompatible(b2, b1) => 
-                \E Q \in Quorums(n) : \A m \in Q : b2 \in acceptedAborted[m]
+                \E Q \in Quorums(n) : \A m \in Q \ byz : b2 \in acceptedAborted[m]
         \/  b1.counter = 1 \* Initially, we can skip the prepare phase
         \/ \E cnt \in BallotNumber : cnt < b1.counter /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
 
@@ -81,12 +81,12 @@ Step(n) ==
         /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToAbort[m] \cup acceptedAborted[m]
-                \/ \E Bl \in BlockingSets(n) : \A m \in Bl : b \in acceptedAborted[m]
+            /\  \/ \E Q \in Quorums(n) : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
+                \/ \E Bl \in BlockingSets(n) : \A m \in Bl \ byz : b \in acceptedAborted[m]
         /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : \E Q \in Quorums(n) :
-                \A m \in Q : b \in acceptedAborted[m]
+                \A m \in Q \ byz : b \in acceptedAborted[m]
         /\  confirmedAborted' = [confirmedAborted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : 
@@ -99,16 +99,15 @@ Step(n) ==
         /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorums(n) : \A m \in Q : b \in voteToCommit[m] \cup acceptedCommitted[m]
-                \/ \E Bl \in BlockingSets(n) : \A m \in Bl : b \in acceptedCommitted[m]
+            /\  \/ \E Q \in Quorums(n) : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
+                \/ \E Bl \in BlockingSets(n) : \A m \in Bl \ byz : b \in acceptedCommitted[m]
             /\  IsPrepared(n, b)
         /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : \E Q \in Quorums(n) :
-                \A m \in Q : b \in acceptedCommitted[m]
+                \A m \in Q \ byz : b \in acceptedCommitted[m]
         /\  externalized' = [externalized EXCEPT ![n] = @ \cup B]
     /\  UNCHANGED <<byz>>
-    \* /\  BallotingConsistencyRules(n)'
 
 ByzantineHavoc ==
     /\ \E x \in [byz -> SUBSET Ballot] :

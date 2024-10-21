@@ -190,13 +190,10 @@ ConfirmPrepared(n, b) ==
     /\  LessThan(h[n], b)
     /\  \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
-    /\  IF  /\ c[n].counter = -1 
-            /\ b = ballot[n]
-            /\ \neg Aborted(n, b)
+    /\  IF c[n].counter = -1 /\ b = ballot[n] /\ \neg Aborted(n, b)
         THEN c' = [c EXCEPT ![n] = b]
         ELSE UNCHANGED c
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, sent, byz>>
-
 
 (***************************************************************)
 (* We go to phase COMMIT when we accept a ballot as committed. *)
