@@ -163,16 +163,15 @@ AcceptsPrepared(b, m) ==
     /\  \/  /\  b.counter <= m.prepared.counter
             /\  b.value = m.prepared.value
         \/  b.counter < m.aCounter
-    
-Aborted(n, b) ==
-    \/  b.counter < aCounter[n]
-    \/  LowerAndIncompatible(b, prepared[n])
 
-\* Update what is accepted as prepared:
-AcceptPrepared(n, b) ==
-    /\  LessThan(prepared[n], b)
-    /\  \/ \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
-        \/ \E B \in BlockingSets(n) : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
+\* whether b is aborted given aCounter and prepared:
+Aborted(b, a, p) ==
+    \/  b.counter < a
+    \/  LowerAndIncompatible(b, p)
+
+\* update prepared, aCounter, and c given a new accepted-prepared ballot
+\* assumes LessThan(prepared[n], b)
+UpdatePrepared(n, b) ==
     /\  prepared' = [prepared EXCEPT ![n] = b]
     /\  IF prepared[n].counter > -1 /\ prepared[n].value # b.value
         THEN aCounter' = [aCounter EXCEPT ![n] =
@@ -180,9 +179,16 @@ AcceptPrepared(n, b) ==
             THEN prepared[n].counter
             ELSE prepared[n].counter+1]  
         ELSE UNCHANGED aCounter
-    /\  IF c[n].counter > -1 /\ Aborted(n, c[n])'
+    /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
         THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
         ELSE UNCHANGED c
+    
+\* Update what is accepted as prepared:
+AcceptPrepared(n, b) ==
+    /\  LessThan(prepared[n], b)
+    /\  \/ \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
+        \/ \E B \in BlockingSets(n) : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
+    /\  UpdatePrepared(n, b)
     /\  UNCHANGED <<ballot, phase, h, sent, byz>>
 
 \* Update what is confirmed as prepared:
@@ -191,18 +197,9 @@ ConfirmPrepared(n, b) ==
     /\  \E Q \in Quorums(n) : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
     /\  IF LessThan(prepared[n], b) \* confirmed prepared implies accepted prepared
-        THEN prepared' = [prepared EXCEPT ![n] = b]
-        ELSE UNCHANGED prepared
-    /\  IF c[n].counter = -1
-        THEN
-            IF b = ballot[n] /\ \neg Aborted(n, b)
-            THEN c' = [c EXCEPT ![n] = b]
-            ELSE UNCHANGED c
-        ELSE
-            IF Aborted(n, c[n])'
-            THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
-            ELSE UNCHANGED c
-    /\  UNCHANGED <<ballot, phase, aCounter, sent, byz>>
+        THEN UpdatePrepared(n, b)
+        ELSE UNCHANGED <<prepared, aCounter, c>>
+    /\  UNCHANGED <<ballot, phase, sent, byz>>
 
 (***************************************************************)
 (* We go to phase COMMIT when we accept a ballot as committed. *)
