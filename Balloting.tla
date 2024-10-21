@@ -20,6 +20,7 @@ BlockingSets(n) == {B \in SUBSET N :
     \A Q \in Quorum : Q \cap B # {}}
 someValue == CHOOSE v \in V : TRUE
 Ballot == [counter : BallotNumber, value : V]
+NullBallot == [counter |-> -1, value |-> someValue]
 BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]
 Max(x, y) == IF x > y THEN x ELSE y
 Min(x, y) == IF x < y THEN x ELSE y
@@ -113,12 +114,12 @@ VARIABLES
 ,   byz \* the set of Byzantine nodes
 
 Init ==
-    /\ ballot = [n \in N |-> [counter |-> -1, value |-> someValue]]
+    /\ ballot = [n \in N |-> NullBallot]
     /\ phase = [n \in N |-> "PREPARE"]
-    /\ prepared = [n \in N |-> [counter |-> -1, value |-> someValue]]
+    /\ prepared = [n \in N |-> NullBallot]
     /\ aCounter = [n \in N |-> 0]
-    /\ h = [n \in N |-> [counter |-> -1, value |-> someValue]]
-    /\ c = [n \in N |-> [counter |-> -1, value |-> someValue]]
+    /\ h = [n \in N |-> NullBallot]
+    /\ c = [n \in N |-> NullBallot]
     /\ sent = [n \in N |-> {}]
     /\ byz \in FailProneSet
 
@@ -180,7 +181,7 @@ UpdatePrepared(n, b) ==
             ELSE prepared[n].counter+1]  
         ELSE UNCHANGED aCounter
     /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
-        THEN c' = [c EXCEPT ![n] = [counter |-> -1, value |-> someValue]]
+        THEN c' = [c EXCEPT ![n] = NullBallot]
         ELSE UNCHANGED c
     
 \* Update what is accepted as prepared:
@@ -282,10 +283,15 @@ Invariant ==
         /\  ballot[n].counter = -1 \/ ballot[n].counter > 0
         /\  prepared[n].counter > -1 => aCounter[n] <= prepared[n].counter
         /\  prepared[n].counter = -1 => aCounter[n] = 0
-        /\  c[n].counter <= h[n].counter
+        /\  LessThanOrEqual(h[n], prepared[n])
         /\  c[n].counter = -1 \/ c[n].counter > 0
-        /\  c[n].counter > 0 => c[n].value = h[n].value /\ c[n].value = prepared[n].value
-        /\  LessThan(h[n], prepared[n])
+        /\  c[n].counter <= h[n].counter
+        /\  c[n].counter <= ballot[n].counter
+        /\  c[n].counter > 0 =>
+                /\  c[n].value = h[n].value
+                /\  c[n].value = prepared[n].value
+                /\  c[n].value = ballot[n].value
+        /\  LessThanOrEqual(h[n], prepared[n])
 
 \* Next we instantiate the AbstractBalloting specification
 
