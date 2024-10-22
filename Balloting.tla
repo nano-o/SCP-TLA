@@ -157,15 +157,24 @@ Aborted(b, a, p) ==
     \/  LessThanAndIncompatible(b, p)
 
 \* update prepared and aCounter given a new accepted-prepared ballot
-\* assumes prepared[n] \preceq b
 UpdatePrepared(n, b) ==
-    /\  prepared' = [prepared EXCEPT ![n] = b]
-    /\  IF prepared[n].counter > -1 /\ prepared[n].value # b.value
-        THEN aCounter' = [aCounter EXCEPT ![n] =
-            IF prepared[n].value < b.value
-            THEN prepared[n].counter
-            ELSE prepared[n].counter+1]
-        ELSE UNCHANGED aCounter
+    \* IF prepared[n] \prec b
+    \* THEN
+        /\  prepared' = [prepared EXCEPT ![n] = b]
+        /\  IF prepared[n].counter > -1 /\ prepared[n].value # b.value
+            THEN aCounter' = [aCounter EXCEPT ![n] =
+                IF prepared[n].value < b.value
+                THEN prepared[n].counter
+                ELSE prepared[n].counter+1]
+            ELSE UNCHANGED aCounter
+    \* ELSE \* TODO: this shouldn't hurt, but not sure it's needed.
+    \*     IF b.value # prepared[n].value /\ b.counter >= aCounter[n]
+    \*     THEN aCounter' = [aCounter EXCEPT ![n] =
+    \*         IF prepared[n].value < b.value
+    \*         THEN prepared[n].counter
+    \*         ELSE prepared[n].counter+1]
+    \*     ELSE
+    \*         ELSE UNCHANGED aCounter
     
 \* Update what is accepted as prepared:
 AcceptPrepared(n, b) ==
@@ -184,11 +193,14 @@ ConfirmPrepared(n, b) ==
     /\  h[n] \prec b
     /\  \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
+    \* TODO what if we confirm prepared something that's lower and incompatible with prepared? Should we update aCounter?
     /\  IF prepared[n] \prec b \* confirmed prepared implies accepted prepared
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter>>
     \* Update c (either reset to NullBallot, if it has been aborted, or set it to b):
-    /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
+    /\  IF  /\  c[n].counter > -1
+            /\  \/  Aborted(c[n], aCounter'[n], prepared'[n])
+                \/  LessThanAndIncompatible(c[n], b) \* NOTE we have to do this unless we update aCounter even when b \prec prepared[n]
         THEN c' = [c EXCEPT ![n] = NullBallot]
         ELSE
             IF  /\  c[n].counter = -1
@@ -348,4 +360,5 @@ Canary2 == \neg (
 Canary3 == \neg (
     \E Q \in Quorum : \A n \in Q \ byz : c[n].counter = 1
 )
+
 =============================================================================
