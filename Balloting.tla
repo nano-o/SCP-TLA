@@ -139,7 +139,7 @@ VotesToPrepare(b, m) ==
                 /\  b.value = m.prepared.value
             \/  b.counter < m.aCounter
     \/  /\  m.type = "COMMIT"
-        /\  b.counter <= m.preparedCounter
+        \* /\  b.counter <= m.preparedCounter \* TODO remove this? (see LogicalMessages)
         /\  b.value = m.ballot.value
 
 AcceptsPrepared(b, m) ==
