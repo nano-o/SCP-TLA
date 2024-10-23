@@ -3,7 +3,8 @@ This repository contains specifications related to the Stellar Consensus Protoco
 # The balloting protocol
 
 [`AbstractBalloting.tla`](AbstractBalloting.tla) contains a high-level specification of SCP's balloting protocol in terms of logical federate-voting messages (also see the PDF version [`AbstractBalloting.pdf`](AbstractBalloting.pdf)).
-It will be useful to prove that the concrete balloting protocol is correct by refinement.
+This specification will be useful to prove that the concrete balloting protocol is correct by refinement.
+
 We provide an inductive invariant implying the safety property.
 On Linux, you should be able to check that this invariant is inductive using the Apalache model-checker by running `make abstractballoting-safety`.
 This checks the invariant for the system parameters defined in [`ApaAbstractBalloting.tla`](ApaAbstractBalloting.tla).
