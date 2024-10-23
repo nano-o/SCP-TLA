@@ -1,17 +1,8 @@
 ----------------------------- MODULE Balloting -----------------------------
 
-(**************************************************************************************)
-(* Specification of SCP's balloting protocol following the `^IETF^' draft at:         *)
-(*                                                                                    *)
-(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
-(*                                                                                    *)
-(* This specification abstracts over some aspects of the protocol (e.g. increasing    *)
-(* the ballot counter), but it does explicitely represent balloting messages.         *)
-(* There are also some differences compared to the `^IETF^' draft, due to I suspect   *)
-(* are omissions in the `^IETF^' draft.                                               *)
-(*                                                                                    *)
-(* Currently this specification covers only the `^PREPARE^' and `^COMMIT^' phases.    *)
-(**************************************************************************************)
+(**************************************************)
+(* Specification of SCP following the IETF draft. *)
+(**************************************************)
 
 EXTENDS DomainModel
 
@@ -40,7 +31,6 @@ SCPExternalize == [
 Message ==
     SCPPrepare \cup SCPCommit \cup SCPExternalize
 
-\* Some well-formedness conditions on messages:
 MessageInvariant(m) ==
     /\  m.type = "PREPARE" =>
         /\  m.ballot.counter > 0
@@ -49,16 +39,13 @@ MessageInvariant(m) ==
             /\  m.aCounter <= m.prepared.counter
         /\  m.prepared.counter = -1 => m.aCounter = 0
         /\  m.cCounter <= m.hCounter
+        \* /\  m.hCounter <= m.ballot.counter \* TODO: why this (note it's explicitely mentioned on Page 13)? I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
     /\  m.type = "COMMIT" =>
         /\  m.cCounter > 0
         /\  m.cCounter <= m.ballot.counter
         /\  m.cCounter <= m.hCounter
-\* TODO: Page 13 mentions that we should have m.hCounter <= m.ballot.counter in a PREPARE message
-\* This seems superfluous.
-\* I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
 
-\* Meaning of the messages in terms of logical, federated-voting messages.
-\* We will use this to show that this specification refines the AbstractBalloting specification.
+\* Meaning of the messages in terms of logical, federated-voting messages:
 LogicalMessages(m) ==
     CASE m.type = "PREPARE" -> [
             voteToAbort |-> {b \in Ballot :
@@ -95,10 +82,7 @@ VARIABLES
 ,   phase  \* phase[n] is the current phase of node n
 ,   prepared \* prepared[n] is the highest accepted-prepared ballot by node n
 ,   aCounter \* aCounter[n] is such that all lower ballots are accepted as aborted
-    \* h and c track:
-    \* in the PREPARE phase, the highest and lowest confirmed-prepared ballot
-    \* in the COMMIT phase, the highest and lowest accepted committed ballot
-    \* in the EXTERNALIZE phase, the highest and lowest confirmed committed ballot
+    \* depending on the phase, h and c track the highest and lowest confirmed-prepared (in PREPARE), accepted committed (in COMMIT), or confirmed committed (in EXTERNALIZE) ballot
     \* In phase PREPARE, h.value could be different from ballot.value
 ,   h
 ,   c
@@ -125,15 +109,9 @@ TypeOK ==
     /\ sent \in [N -> SUBSET Message]
     /\ byz \in SUBSET N
 
-\* faulty nodes can send any message they want
 ByzStep == \E msgs \in [byz -> SUBSET Message] :
     /\  sent' = [n \in N |-> IF n \notin byz THEN sent[n] ELSE msgs[n]]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
-
-(******************************************************************************)
-(* We start by specifying how a node updates its local state depending on the *)
-(* messages it receives.                                                      *)
-(******************************************************************************)
 
 (*******************************************************************************)
 (* At any point in time, we may increase the ballot counter and set the ballot *)
@@ -147,7 +125,7 @@ IncreaseBallotCounter(n, b) ==
             ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> h[n].value]]
         ELSE
             \E v \in V : ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> v]]
-    \* TODO: optimization
+    \* TODO: optimization:
     \* /\  IF b = 1
     \*     THEN c' = [c EXCEPT ![n] = ballot'[n]]
     \*     ELSE UNCHANGED c
@@ -161,6 +139,7 @@ VotesToPrepare(b, m) ==
                 /\  b.value = m.prepared.value
             \/  b.counter < m.aCounter
     \/  /\  m.type = "COMMIT"
+        /\  b.counter <= m.preparedCounter
         /\  b.value = m.ballot.value
 
 AcceptsPrepared(b, m) ==
@@ -179,7 +158,6 @@ Aborted(b, a, p) ==
 
 \* update prepared and aCounter given a new accepted-prepared ballot
 UpdatePrepared(n, b) ==
-    \* TODO: what's commented out might be needed for liveness:
     \* IF prepared[n] \prec b
     \* THEN
         /\  prepared' = [prepared EXCEPT ![n] = b]
@@ -189,7 +167,7 @@ UpdatePrepared(n, b) ==
                 THEN prepared[n].counter
                 ELSE prepared[n].counter+1]
             ELSE UNCHANGED aCounter
-    \* ELSE
+    \* ELSE \* TODO: this shouldn't hurt, but not sure it's needed.
     \*     IF b.value # prepared[n].value /\ b.counter >= aCounter[n]
     \*     THEN aCounter' = [aCounter EXCEPT ![n] =
     \*         IF prepared[n].value < b.value
@@ -215,15 +193,14 @@ ConfirmPrepared(n, b) ==
     /\  h[n] \prec b
     /\  \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
-    \* TODO what if we confirm prepared something that's lower and incompatible with prepared?
-    \* Should we update aCounter? (see commented-out part of UpdatePrepared)
+    \* TODO what if we confirm prepared something that's lower and incompatible with prepared? Should we update aCounter?
     /\  IF prepared[n] \prec b \* confirmed prepared implies accepted prepared
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter>>
     \* Update c (either reset to NullBallot, if it has been aborted, or set it to b):
     /\  IF  /\  c[n].counter > -1
             /\  \/  Aborted(c[n], aCounter'[n], prepared'[n])
-                \/  LessThanAndIncompatible(c[n], b)
+                \/  LessThanAndIncompatible(c[n], b) \* NOTE we have to do this unless we update aCounter even when b \prec prepared[n]
         THEN c' = [c EXCEPT ![n] = NullBallot]
         ELSE
             IF  /\  c[n].counter = -1
@@ -236,7 +213,6 @@ ConfirmPrepared(n, b) ==
         ELSE UNCHANGED ballot
     /\  UNCHANGED <<phase, sent, byz>>
 
-\* NOTE this should be consistent with LogicalMessages
 VotesToCommit(b, m) ==
     \/  /\  m.type = "PREPARE"
         /\  m.cCounter > 0
@@ -247,7 +223,6 @@ VotesToCommit(b, m) ==
         /\  m.cCounter <= b.counter
         /\  b.value = m.ballot.value
 
-\* NOTE this should be consistent with LogicalMessages
 AcceptsCommitted(b, m) ==
     /\  m.type = "COMMIT"
     /\  b.value = m.ballot.value
@@ -267,10 +242,6 @@ AcceptCommitted(n, b) ==
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter>>
     /\  UNCHANGED <<ballot, sent, byz>>
-
-(******************************************************)
-(* Now we specify what messages can be sent by a node *)
-(******************************************************)
 
 \* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
 SummarizePrepared(n) ==
@@ -324,10 +295,6 @@ SendExternalize(n) ==
             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
-(******************************************)
-(* We can now give the full specification *)
-(******************************************)
-
 Next ==
     \/ ByzStep
     \/ \E n \in N \ byz :
@@ -344,10 +311,6 @@ vars == <<ballot, phase, prepared, aCounter, h, c, sent, byz>>
 
 Spec ==
     Init /\ [][Next]_vars
-
-(*****************************************)
-(* We now turn to correctness properties *)
-(*****************************************)
 
 Invariant ==
     /\  TypeOK
@@ -385,8 +348,7 @@ InitRefinement ==
 NextRefinement ==
     [][Next => AB!Next]_vars
 
-\* Debugging canaries:
-
+\* Canaries
 Canary1 == \neg (
     \E n \in N \ byz : phase[n] = "COMMIT"
 )
@@ -398,5 +360,4 @@ Canary2 == \neg (
 Canary3 == \neg (
     \E Q \in Quorum : \A n \in Q \ byz : c[n].counter = 1
 )
-
 =============================================================================

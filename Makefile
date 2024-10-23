@@ -9,7 +9,6 @@ $(APA):
 	wget --no-check-certificate --content-disposition $(APA_RELEASE_URL)
 	tar -xzf $(APA_ARCHIVE)
 
-# Download the TLC_JAR if it does not exist
 $(TLC_JAR):
 	wget --no-check-certificate --content-disposition -O $@ $(TLC_JAR_URL)
 
@@ -18,5 +17,9 @@ $(TLC_JAR):
 
 abstractballoting-safety: $(APA)
 	APA=$(APA) ./check.sh -inductive Invariant AbstractBalloting
+
+balloting-refinement: $(TLC_JAR)
+	java -Xmx10G -XX:+UseParallelGC -XX:MaxDirectMemorySize=10G -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -jar tla2tools.jar -workers 4 -checkpoint 30 -tool TLCBalloting.tla
+
 
 .PHONY: abstract-scp-safety

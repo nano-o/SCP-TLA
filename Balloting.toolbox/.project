@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>Balloting</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>toolbox.builder.TLAParserBuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>toolbox.natures.TLANature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>AbstractBalloting.tla</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/AbstractBalloting.tla</locationURI>
+		</link>
+		<link>
+			<name>Balloting.tla</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Balloting.tla</locationURI>
+		</link>
+		<link>
+			<name>DomainModel.tla</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/DomainModel.tla</locationURI>
+		</link>
+	</linkedResources>
+</projectDescription>

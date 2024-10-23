@@ -1,13 +1,12 @@
 ------------- MODULE AbstractBalloting -------------
 
 (**************************************************************************************)
-(* This is a formalization of `^SCP^''s abstract balloting protocol described in      *)
-(* Section 3.5 of the `^IETF^' draft at:                                              *)
-(*                                                                                    *)
+(* This is a formalization of SCP's abstract balloting protocol described in          *)
+(* Section 3.5 of the IETF draft at                                                   *)
 (* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
 (*                                                                                    *)
 (* The goal if to then refine this specification to one that closely matches the      *)
-(* concrete `^SCP^' protocol.                                                         *)
+(* concrete SCP protocol.                                                             *)
 (*                                                                                    *)
 (* We provide an inductive invariant showing that, by following the 2                 *)
 (* ``restrictions on voting'' described in Section 3.5 of the above document,         *)
@@ -49,15 +48,11 @@ IsPrepared(n, b1) ==
         \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b1) => 
                 \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
         \/  b1.counter = 1 \* Initially, we can skip the prepare phase
-        \/ \E cnt \in BallotNumber : 
-            /\  cnt < b1.counter
-            /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
-            \* NOTE: is cnt < b1.counter necessary?
+        \/ \E cnt \in BallotNumber : cnt < b1.counter /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n] \* NOTE: is cnt < b1.counter necessary?
 
 Step(n) ==
     /\  UNCHANGED <<byz>>
-    \* NOTE for TLC, we must update acceptedAborted before voteToAbort,
-    \* because updating voteToAbort depends on acceptedAborted':
+    \* NOTE we must update acceptedAborted before voteToAbort because updating voteToAbort depends on acceptedAborted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
@@ -66,8 +61,7 @@ Step(n) ==
     /\ \E B \in SUBSET Ballot :
         /\  \A b \in B : b \notin voteToCommit[n] \/ b \in acceptedAborted'[n]
         /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
-    \* NOTE for TLC, we must update acceptedCommitted before voteToCommit,
-    \* because updating voteToCommit depends on acceptedCommitted':
+    \* NOTE we must update acceptedCommitted before voteToCommit because updating voteToCommit depends on acceptedCommitted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
@@ -76,11 +70,9 @@ Step(n) ==
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : 
             /\  b.counter > 0 \* we start at ballot 1
-             \* if the ballot is already aborted, don't vote to commit
-             \* (using the primed version ensures we don't vote to commit and abort at the same time):
+             \* if the ballot is already aborted, don't vote to commit (using the primed version ensures we don't vote to commit and abort at the same time):
             /\  b \notin voteToAbort'[n] \cup acceptedAborted'[n]
-             \* the prime allows us to consider prepared something we accepted committed in this very step:
-            /\  IsPrepared(n, b)'
+            /\  IsPrepared(n, b)' \* the prime allows us to consider prepared something we accepted committed in this very step
         /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup B]
         \* we vote to commit at most one value per ballot number:
         /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
