@@ -52,7 +52,7 @@ IsPrepared(n, b1) ==
 
 Step(n) ==
     /\  UNCHANGED <<byz>>
-    \* NOTE we must update acceptedAborted before voteToAbort because updating voteToAbort depends on acceptedAborted':
+    \* NOTE for TLC, we must update acceptedAborted before voteToAbort because updating voteToAbort depends on acceptedAborted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
@@ -61,7 +61,7 @@ Step(n) ==
     /\ \E B \in SUBSET Ballot :
         /\  \A b \in B : b \notin voteToCommit[n] \/ b \in acceptedAborted'[n]
         /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
-    \* NOTE we must update acceptedCommitted before voteToCommit because updating voteToCommit depends on acceptedCommitted':
+    \* NOTE for TLC, we must update acceptedCommitted before voteToCommit because updating voteToCommit depends on acceptedCommitted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
             /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
