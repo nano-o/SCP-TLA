@@ -381,9 +381,9 @@ THEOREM Spec => AB!Spec
 
 \* To check the refinement with TLC:
 InitRefinement ==
-    Init => AB!Init
+    AB!Init
 NextRefinement ==
-    [][Next => AB!Next]_vars
+    [][AB!Next]_vars
 
 \* Debugging canaries:
 
