@@ -4,9 +4,9 @@ APA=apalache-${APA_VERSION}
 APA_ARCHIVE=$(APA).tgz
 TLA_TOOLS_JAR=tla2tools.jar
 TLA_TOOLS_JAR_URL=https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-TLC_WORKERS=14
-TLC_OFFHEAP_MEMORY=30G
-TLC_HEAP=10G
+TLC_WORKERS=4
+TLC_OFFHEAP_MEMORY=10G
+TLC_HEAP=5G
 
 all:
 
