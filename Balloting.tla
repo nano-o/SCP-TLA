@@ -281,9 +281,15 @@ SummarizePrepared(n) ==
         THEN [
             prepared |-> [counter |-> ballot[n].counter, value |-> prepared[n].value],
             aCounter |-> Min(aCounter[n], ballot[n].counter)]
-        ELSE [
-            prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
-            aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
+        ELSE 
+            IF aCounter[n] = ballot[n].counter
+            \* TODO okay?
+            THEN [
+                prepared |-> [counter |-> ballot[n].counter, value |-> ballot[n].value],
+                aCounter |-> aCounter[n]]
+            ELSE [
+                prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
+                aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
 
 SendPrepare(n) ==
     /\  ballot[n].counter > 0
