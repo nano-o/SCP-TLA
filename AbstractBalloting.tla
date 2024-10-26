@@ -50,9 +50,9 @@ IsPrepared(n, b1) ==
                 \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
         \/  b1.counter = 1 \* Initially, we can skip the prepare phase
         \/ \E cnt \in BallotNumber : 
-            /\  cnt < b1.counter
             /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
-            \* NOTE: is cnt < b1.counter necessary?
+             \* not necessary:
+            \* /\  cnt < b1.counter
 
 Step(n) ==
     /\  UNCHANGED <<byz>>

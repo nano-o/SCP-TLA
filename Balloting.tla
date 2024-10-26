@@ -231,7 +231,7 @@ ConfirmPrepared(n, b) ==
                 /\  \neg Aborted(b, aCounter'[n], prepared'[n])
             THEN c' = [c EXCEPT ![n] = b]
             ELSE UNCHANGED c
-    /\  IF b.counter > 0 /\ ballot[n] \prec b
+    /\  IF b.counter > 0 /\ ballot[n].counter < b.counter
         THEN ballot' = [ballot EXCEPT ![n] = b] \* not strictly necessary, but might help curb the statespace
         ELSE UNCHANGED ballot
     /\  UNCHANGED <<phase, sent, byz>>
