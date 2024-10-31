@@ -20,8 +20,8 @@ BlockingSet == {B \in SUBSET N :
 
 someValue == CHOOSE v \in V : TRUE
 
-\* @typeAlias: BALLOT = {counter : Int, value : Int};
-\* @type: Set(BALLOT);
+\* @typeAlias: ballot = {counter : Int, value : Int};
+\* @type: Set($ballot);
 Ballot == [counter : BallotNumber, value : V]
 NullBallot == [counter |-> -1, value |-> someValue]
 BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]

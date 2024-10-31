@@ -7,23 +7,25 @@ FailProneSet == {{"N1_OF_NODE"}, {"N3_OF_NODE"}}
 Quorum  == {{"N1_OF_NODE", "N2_OF_NODE"}, {"N2_OF_NODE", "N3_OF_NODE"}}
 BallotNumber == {0,1,2}
 
+INSTANCE DomainModel
+
 VARIABLES
-    \* @type: NODE -> BALLOT;
+    \* @type: NODE -> $ballot;
     ballot
-    \* @type: NODE -> Str;
-,   phase
-    \* @type: NODE -> BALLOT;
-,   prepared
-    \* @type: NODE -> Int;
-,   aCounter
-    \* @type: NODE -> BALLOT;
-,   h
-    \* @type: NODE -> BALLOT;
-,   c
-    \* @type: Set(MESSAGE);
-,   sent
-    \* @type: Set(NODE);
-,   byz
+,   \* @type: NODE -> Str;
+    phase
+,   \* @type: NODE -> $ballot;
+    prepared
+,   \* @type: NODE -> Int;
+    aCounter
+,   \* @type: NODE -> $ballot;
+    h
+,   \* @type: NODE -> $ballot;
+    c
+,   \* @type: NODE -> Set($message);
+    sent
+,   \* @type: Set(NODE);
+    byz
 
 INSTANCE Balloting
 

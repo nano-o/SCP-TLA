@@ -17,10 +17,10 @@ EXTENDS DomainModel, Variants
 
 Phase == {"PREPARE", "COMMIT", "EXTERNALIZE"}
 
-\* @typeAlias: MESSAGE =
-\*    PREPARE({ballot : BALLOT, prepared : BALLOT, aCounter : Int, hCounter : Int, cCounter : Int})
-\*  | COMMIT({ballot : BALLOT, preparedCounter : Int, hCounter : Int, cCounter : Int});
-\* @type: Set(MESSAGE);
+\* @typeAlias: message =
+\*    PREPARE({ballot : $ballot, prepared : $ballot, aCounter : Int, hCounter : Int, cCounter : Int})
+\*  | COMMIT({ballot : $ballot, preparedCounter : Int, hCounter : Int, cCounter : Int});
+\* @type: Set($message);
 SCPPrepare == {Variant("PREPARE", m) : m \in [
     ballot : Ballot
 ,   prepared : BallotOrNull
@@ -28,21 +28,20 @@ SCPPrepare == {Variant("PREPARE", m) : m \in [
 ,   hCounter : BallotNumber
 ,   cCounter : BallotNumber]}
 
-\* @type: Set(MESSAGE);
+\* @type: Set($message);
 SCPCommit == {Variant("COMMIT", m) : m \in [
     ballot : Ballot
 ,   preparedCounter : BallotNumber
 ,   hCounter : BallotNumber
 ,   cCounter : BallotNumber]}
 
-\* @type: Set(MESSAGE);
-SCPExternalize == {Variant("EXTERNALIZE", m) : m \in [
-    commit : Ballot
-,   hCounter : BallotNumber]}
+\* SCPExternalize == {Variant("EXTERNALIZE", m) : m \in [
+\*     commit : Ballot
+\* ,   hCounter : BallotNumber]}
 
-\* @type: Set(MESSAGE);
+\* @type: Set($message);
 Message ==
-    SCPPrepare \cup SCPCommit \cup SCPExternalize
+    SCPPrepare \cup SCPCommit \* \cup SCPExternalize
 
 \* Some well-formedness conditions on messages:
 MessageInvariant(taggedMsg) ==
@@ -67,35 +66,39 @@ MessageInvariant(taggedMsg) ==
 \* Meaning of the messages in terms of logical, federated-voting messages.
 \* We will use this to show that this specification refines the AbstractBalloting specification.
 LogicalMessages(taggedMsg) ==
-    CASE VariantTag(taggedMsg) = "PREPARE" -> LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN [
-            voteToAbort |-> {b \in Ballot :
-                LessThanAndIncompatible(b, m.ballot)},
-            acceptedAborted |-> {b \in Ballot :
-                \/ LessThanAndIncompatible(b, m.prepared)
-                \/ b.counter < m.aCounter},
-            confirmedAborted |->
-                IF m.hCounter = 0 THEN {}
-                ELSE {b \in Ballot :
-                    LET h == [counter |-> m.hCounter, value |-> m.ballot.value]
-                    IN  LessThanAndIncompatible(b, h)},
-            voteToCommit |-> IF m.cCounter = 0 THEN {}
-                ELSE {b \in Ballot :
-                    /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
-                    /\ b.value = m.ballot.value},
-            acceptedCommitted |-> {}]
-    []  VariantTag(taggedMsg) = "COMMIT" -> LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN [
-            voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
-            acceptedAborted |->
-                LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
-                IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
-            confirmedAborted |->
-                LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
-                IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
-            voteToCommit |-> {b \in Ballot :
-                m.cCounter <= b.counter /\ b.value = m.ballot.value},
-            acceptedCommitted |-> {b \in Ballot :
+    IF VariantTag(taggedMsg) = "PREPARE"
+    THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN [
+        voteToAbort |-> {b \in Ballot :
+            LessThanAndIncompatible(b, m.ballot)},
+        acceptedAborted |-> {b \in Ballot :
+            \/ LessThanAndIncompatible(b, m.prepared)
+            \/ b.counter < m.aCounter},
+        confirmedAborted |->
+            IF m.hCounter = 0 THEN {}
+            ELSE
+                LET \* @type: $ballot;
+                    hbal == [counter |-> m.hCounter, value |-> m.ballot.value]
+                IN {b \in Ballot : LessThanAndIncompatible(b, hbal)},
+        voteToCommit |-> IF m.cCounter = 0 THEN {}
+            ELSE {b \in Ballot :
                 /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
-                /\ b.value = m.ballot.value}]
+                /\ b.value = m.ballot.value},
+        acceptedCommitted |-> {}]
+    ELSE IF VariantTag(taggedMsg) = "COMMIT"
+    THEN LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN [
+        voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
+        acceptedAborted |->
+            LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
+            IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
+        confirmedAborted |->
+            LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
+            IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
+        voteToCommit |-> {b \in Ballot :
+            m.cCounter <= b.counter /\ b.value = m.ballot.value},
+        acceptedCommitted |-> {b \in Ballot :
+            /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
+            /\ b.value = m.ballot.value}]
+    ELSE [voteToAbort |-> {}, acceptedAborted |-> {}, confirmedAborted |-> {}, voteToCommit |-> {}, acceptedCommitted |-> {}]
 
 VARIABLES
     ballot \* ballot[n] is the current ballot being prepared or committed by node n
@@ -160,6 +163,7 @@ IncreaseBallotCounter(n, b) ==
     \*     ELSE UNCHANGED c
     /\ UNCHANGED <<phase, prepared, aCounter, h, c, sent, byz>>
 
+\* @type: ($ballot, $message) => Bool;
 VotesToPrepare(b, taggedMsg) ==
     IF VariantTag(taggedMsg) = "PREPARE"
     THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN
@@ -173,6 +177,7 @@ VotesToPrepare(b, taggedMsg) ==
         /\  b.value = m.ballot.value
     ELSE TRUE
 
+\* @type: ($ballot, $message) => Bool;
 AcceptsPrepared(b, taggedMsg) ==
     IF VariantTag(taggedMsg) = "PREPARE"
     THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN
@@ -250,6 +255,7 @@ ConfirmPrepared(n, b) ==
     /\  UNCHANGED <<phase, sent, byz>>
 
 \* NOTE this should be consistent with LogicalMessages
+\* @type: ($ballot, $message) => Bool;
 VotesToCommit(b, taggedMsg) ==
     IF VariantTag(taggedMsg) = "PREPARE"
     THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN
@@ -264,12 +270,15 @@ VotesToCommit(b, taggedMsg) ==
     ELSE TRUE
 
 \* NOTE this should be consistent with LogicalMessages
+\* @type: ($ballot, $message) => Bool;
 AcceptsCommitted(b, taggedMsg) ==
     IF VariantTag(taggedMsg) = "COMMIT"
-    THEN LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN
-    /\  b.value = m.ballot.value
-    /\  m.cCounter <= b.counter
-    /\  b.counter <= m.hCounter
+    THEN
+        LET m == VariantGetUnsafe("COMMIT", taggedMsg)
+        IN
+            /\  b.value = m.ballot.value
+            /\  m.cCounter <= b.counter
+            /\  b.counter <= m.hCounter
     ELSE FALSE
 
 AcceptCommitted(n, b) ==
@@ -406,19 +415,5 @@ InitRefinement ==
     AB!Init
 NextRefinement ==
     [][AB!Next]_vars
-
-\* Debugging canaries:
-
-Canary1 == \neg (
-    \E n \in N \ byz : phase[n] = "COMMIT"
-)
-Canary2 == \neg (
-    \E n \in N \ byz : \E msg \in sent[n] :
-        /\  msg.type = "PREPARE"
-        /\  msg.cCounter = 1
-)
-Canary3 == \neg (
-    \E Q \in Quorum : \A n \in Q \ byz : c[n].counter = 1
-)
 
 =============================================================================
