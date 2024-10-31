@@ -44,6 +44,7 @@ Message ==
     SCPPrepare \cup SCPCommit \* \cup SCPExternalize
 
 \* Some well-formedness conditions on messages:
+\* @type: $message => Bool;
 MessageInvariant(taggedMsg) ==
     IF VariantTag(taggedMsg) = "PREPARE"
     THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN
@@ -65,6 +66,7 @@ MessageInvariant(taggedMsg) ==
 
 \* Meaning of the messages in terms of logical, federated-voting messages.
 \* We will use this to show that this specification refines the AbstractBalloting specification.
+\* @type: $message => {voteToAbort : Set($ballot), acceptedAborted : Set($ballot), confirmedAborted : Set($ballot), voteToCommit : Set($ballot), acceptedCommitted : Set($ballot)};
 LogicalMessages(taggedMsg) ==
     IF VariantTag(taggedMsg) = "PREPARE"
     THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN [
@@ -323,14 +325,14 @@ SendPrepare(n) ==
     /\  ballot[n].counter > 0
     /\  phase[n] = "PREPARE"
     /\  LET msg == Variant("PREPARE", [
-            ballot |-> ballot[n]
-        ,   prepared |-> SummarizePrepared(n).prepared
-        ,   aCounter |-> SummarizePrepared(n).aCounter
-        ,   hCounter |->
-                IF h[n].counter > -1 /\ h[n].value = ballot[n].value
-                THEN h[n].counter
-                ELSE 0
-        ,   cCounter |-> Max(c[n].counter, 0)])
+                ballot |-> ballot[n]
+            ,   prepared |-> SummarizePrepared(n).prepared
+            ,   aCounter |-> SummarizePrepared(n).aCounter
+            ,   hCounter |->
+                    IF h[n].counter > -1 /\ h[n].value = ballot[n].value
+                    THEN h[n].counter
+                    ELSE 0
+            ,   cCounter |-> Max(c[n].counter, 0)])
         IN 
             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
@@ -338,10 +340,10 @@ SendPrepare(n) ==
 SendCommit(n) ==
     /\  phase[n] = "COMMIT"
     /\  LET msg == Variant("COMMIT", [
-            ballot |-> ballot[n]
-        ,   preparedCounter |-> prepared[n].counter
-        ,   hCounter |-> h[n].counter
-        ,   cCounter |-> c[n].counter])
+                ballot |-> ballot[n]
+            ,   preparedCounter |-> prepared[n].counter
+            ,   hCounter |-> h[n].counter
+            ,   cCounter |-> c[n].counter])
         IN
             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>

@@ -27,11 +27,11 @@ NullBallot == [counter |-> -1, value |-> someValue]
 BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]
 
 \* LessThan predicate for comparing two ballots
-\* @type: ({counter : Int, value : Int}, {counter : Int, value : Int}) => Bool;
+\* @type: ($ballot, $ballot) => Bool;
 LessThan(b1, b2) ==
     b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value < b2.value)
 b1 \prec b2 == LessThan(b1, b2)
-\* @type: ({counter : Int, value : Int}, {counter : Int, value : Int}) => Bool;
+\* @type: ($ballot, $ballot) => Bool;
 LessThanOrEqual(b1, b2) ==
     b1.counter < b2.counter \/ (b1.counter = b2.counter /\ b1.value <= b2.value)
 b1 \preceq b2 == LessThanOrEqual(b1, b2)
