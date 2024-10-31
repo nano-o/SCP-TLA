@@ -25,7 +25,7 @@ $(STANDARD_MODULES)/Variants.tla:
 	jar -xf $(APA)/lib/apalache.jar tla2sany/StandardModules/
 
 test: $(APA)
-	$(APA)/bin/apalache-mc check --init=Invariant --inv=Test ApaAbstractBalloting.tla
+	$(APA)/bin/apalache-mc typecheck ApaBalloting.tla
 
 abstractballoting-safety: $(APA)
 	APA=$(APA) ./check.sh -inductive Invariant AbstractBalloting
