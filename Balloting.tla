@@ -25,14 +25,14 @@ SCPPrepare == {Variant("PREPARE", m) : m \in [
     ballot : Ballot
 ,   prepared : BallotOrNull
 ,   aCounter : BallotNumber
-,   hCounter : BallotNumber
-,   cCounter : BallotNumber]}
+,   hCounter : BallotNumber \cup {-1}
+,   cCounter : BallotNumber \cup {-1}]}
 
 SCPCommit == {Variant("COMMIT", m) : m \in [
     ballot : Ballot
 ,   preparedCounter : BallotNumber
-,   hCounter : BallotNumber
-,   cCounter : BallotNumber]}
+,   hCounter : BallotNumber \cup {-1}
+,   cCounter : BallotNumber \cup {-1}]}
 
 \* SCPExternalize == {Variant("EXTERNALIZE", m) : m \in [
 \*     commit : Ballot
@@ -328,7 +328,7 @@ SendPrepare(n) ==
             ,   hCounter |->
                     IF h[n].counter > -1 /\ h[n].value = ballot[n].value
                     THEN h[n].counter
-                    ELSE 0
+                    ELSE -1 \* TODO okay?
             ,   cCounter |-> Max(c[n].counter, 0)])
         IN 
             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]

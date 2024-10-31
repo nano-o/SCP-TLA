@@ -55,7 +55,7 @@ IsPrepared(n, b1) ==
             \* /\  cnt < b1.counter
 
 Step(n) ==
-    /\  UNCHANGED <<byz>>
+    /\  byz' = byz \* Apalache does not like UNCHANGED here. TODO: report bug
     \* NOTE for TLC, we must update acceptedAborted before voteToAbort,
     \* because updating voteToAbort depends on acceptedAborted':
     /\  \E B \in SUBSET Ballot :

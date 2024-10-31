@@ -5,7 +5,7 @@
 
 set -ex
 
-MEM=5G
+MEM=35G
 
 case "$1" in
     -typecheck)
