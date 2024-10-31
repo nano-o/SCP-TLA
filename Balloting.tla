@@ -20,7 +20,7 @@ Phase == {"PREPARE", "COMMIT", "EXTERNALIZE"}
 \* @typeAlias: message =
 \*    PREPARE({ballot : $ballot, prepared : $ballot, aCounter : Int, hCounter : Int, cCounter : Int})
 \*  | COMMIT({ballot : $ballot, preparedCounter : Int, hCounter : Int, cCounter : Int});
-\* @type: Set($message);
+
 SCPPrepare == {Variant("PREPARE", m) : m \in [
     ballot : Ballot
 ,   prepared : BallotOrNull
@@ -28,7 +28,6 @@ SCPPrepare == {Variant("PREPARE", m) : m \in [
 ,   hCounter : BallotNumber
 ,   cCounter : BallotNumber]}
 
-\* @type: Set($message);
 SCPCommit == {Variant("COMMIT", m) : m \in [
     ballot : Ballot
 ,   preparedCounter : BallotNumber
@@ -77,10 +76,8 @@ LogicalMessages(taggedMsg) ==
             \/ b.counter < m.aCounter},
         confirmedAborted |->
             IF m.hCounter = 0 THEN {}
-            ELSE
-                LET \* @type: $ballot;
-                    hbal == [counter |-> m.hCounter, value |-> m.ballot.value]
-                IN {b \in Ballot : LessThanAndIncompatible(b, hbal)},
+            ELSE LET hbal == [counter |-> m.hCounter, value |-> m.ballot.value] IN
+                {b \in Ballot : LessThanAndIncompatible(b, hbal)},
         voteToCommit |-> IF m.cCounter = 0 THEN {}
             ELSE {b \in Ballot :
                 /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
@@ -405,6 +402,7 @@ acceptedAborted == [n \in N |-> UNION {LogicalMessages(m).acceptedAborted : m \i
 confirmedAborted == [n \in N |-> UNION {LogicalMessages(m).confirmedAborted : m \in sent[n]}]
 voteToCommit == [n \in N |-> UNION {LogicalMessages(m).voteToCommit : m \in sent[n]}]
 acceptedCommitted == [n \in N |-> UNION {LogicalMessages(m).acceptedCommitted : m \in sent[n]}]
+\* @type: NODE -> Set($ballot);
 externalized == [n \in N |-> {}]
 
 AB == INSTANCE AbstractBalloting
@@ -417,5 +415,8 @@ InitRefinement ==
     AB!Init
 NextRefinement ==
     [][AB!Next]_vars
+
+\* For Apalache:
+ABNext == AB!Next
 
 =============================================================================
