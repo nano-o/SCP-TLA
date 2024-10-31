@@ -7,6 +7,7 @@ TLA_TOOLS_JAR_URL=https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tl
 TLC_WORKERS=20
 TLC_OFFHEAP_MEMORY=35G
 TLC_HEAP=13G
+STANDARD_MODULES=tla2sany/StandardModules/
 
 all:
 
@@ -20,11 +21,17 @@ $(TLA_TOOLS_JAR):
 # Don't redownload stuff every time
 .PRECIOUS: $(APA) $(TLA_TOOLS_JAR)
 
+$(STANDARD_MODULES)/Variants.tla:
+	jar -xf $(APA)/lib/apalache.jar tla2sany/StandardModules/
+
+test: $(APA)
+	$(APA)/bin/apalache-mc check --init=Invariant --inv=Test ApaAbstractBalloting.tla
+
 abstractballoting-safety: $(APA)
 	APA=$(APA) ./check.sh -inductive Invariant AbstractBalloting
 
-balloting-refinement: $(TLA_TOOLS_JAR)
-	java -Xmx${TLC_HEAP} -XX:+UseParallelGC -XX:MaxDirectMemorySize=${TLC_OFFHEAP_MEMORY} -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -jar tla2tools.jar -workers ${TLC_WORKERS} -checkpoint 30 -generateSpecTE TLCBalloting.tla
+balloting-refinement: $(TLA_TOOLS_JAR) $(STANDARD_MODULES)/Variants.tla
+	java -Xmx${TLC_HEAP} -XX:+UseParallelGC -XX:MaxDirectMemorySize=${TLC_OFFHEAP_MEMORY} -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -cp tla2tools.jar:${STANDARD_MODULES} tlc2.TLC -workers ${TLC_WORKERS} -checkpoint 30 -generateSpecTE TLCBalloting.tla
 
 %.pdf: %.tla
 	java -cp tla2tools.jar tla2tex.TLA -shade -ps -latexCommand pdflatex $<
