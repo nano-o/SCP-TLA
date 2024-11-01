@@ -47,7 +47,7 @@ Init ==
 
 IsPrepared(n, b1) ==
         \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b1) => 
-                \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
+                \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in acceptedAborted[n2]
         \/ \E cnt \in BallotNumber : 
             /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
             /\  cnt < b1.counter \* really necessary?
@@ -58,8 +58,8 @@ Step(n) ==
     \* because updating voteToAbort depends on acceptedAborted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
-                \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedAborted[m]
+            /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToAbort[n2] \cup acceptedAborted[n2]
+                \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedAborted[n2]
         /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
     /\ \E B \in SUBSET Ballot :
         /\  \A b \in B : b \notin voteToCommit[n] \/ b \in acceptedAborted'[n]
@@ -68,8 +68,8 @@ Step(n) ==
     \* because updating voteToCommit depends on acceptedCommitted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
-                \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedCommitted[m]
+            /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToCommit[n2] \cup acceptedCommitted[n2]
+                \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedCommitted[n2]
         /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : 
@@ -84,7 +84,7 @@ Step(n) ==
         /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : \E Q \in Quorum :
-                \A m \in Q \ byz : b \in acceptedCommitted[m]
+                \A n2 \in Q \ byz : b \in acceptedCommitted[n2]
         /\  externalized' = [externalized EXCEPT ![n] = @ \cup B]
 
 ByzantineHavoc ==
@@ -121,19 +121,19 @@ InductiveInvariant ==
             /\  \A b2 \in Ballot :
                     b \in voteToCommit[n] /\ b2 \in voteToCommit[n] /\ b # b2 => b.counter # b2.counter
             /\  b \in acceptedAborted[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in voteToAbort[m]
+                    \A n2 \in Q \ byz : b \in voteToAbort[n2]
             /\  b \in acceptedCommitted[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in voteToCommit[m]
+                    \A n2 \in Q \ byz : b \in voteToCommit[n2]
             /\  b \in externalized[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in acceptedCommitted[m]
+                    \A n2 \in Q \ byz : b \in acceptedCommitted[n2]
             /\  b \in voteToCommit[n] =>
                 \/  b.counter = 1
                 \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) =>
-                        \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
+                        \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in acceptedAborted[n2]
                 \/  \E cnt \in BallotNumber :
                     /\  cnt < b.counter
                     /\  [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
-            /\  b \in acceptedAborted[n] => \A Q \in Quorum : \E m \in Q \ byz : b \notin voteToCommit[m]
+            /\  b \in acceptedAborted[n] => \A Q \in Quorum : \E n2 \in Q \ byz : b \notin voteToCommit[n2]
     /\  Agreement
 
 ==============================================
