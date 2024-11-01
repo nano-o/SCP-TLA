@@ -48,11 +48,9 @@ Init ==
 IsPrepared(n, b1) ==
         \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b1) => 
                 \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
-        \/  b1.counter = 1 \* Initially, we can skip the prepare phase
         \/ \E cnt \in BallotNumber : 
             /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
-             \* not necessary:
-            \* /\  cnt < b1.counter
+            /\  cnt < b1.counter \* really necessary?
 
 Step(n) ==
     /\  UNCHANGED <<byz>>
@@ -108,12 +106,12 @@ vars == <<voteToAbort, acceptedAborted, voteToCommit, acceptedCommitted, externa
 
 Spec == Init /\ [][Next]_vars
 
-Safety ==
+Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
 
 \* Inductive invariant proving safety:
-Invariant ==
+InductiveInvariant ==
     /\  TypeOK
     /\  byz \in FailProneSet
     /\  \A n \in N \ byz :
@@ -136,6 +134,6 @@ Invariant ==
                     /\  cnt < b.counter
                     /\  [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
             /\  b \in acceptedAborted[n] => \A Q \in Quorum : \E m \in Q \ byz : b \notin voteToCommit[m]
-    /\  Safety
+    /\  Agreement
 
 ==============================================

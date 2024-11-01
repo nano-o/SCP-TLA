@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to invoke Apalache
-# For induction checks, the convention is that the provided invariant, e.g. "Inv", is checked inductive relative to "Inv_" (that's the name of the invariant with an underscore at the end).
+# Also see the file .apalache.cfg for common apalache options
 
 set -ex
 
