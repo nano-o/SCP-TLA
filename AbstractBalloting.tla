@@ -76,17 +76,16 @@ Step(n) ==
             /\  b.counter > 0 \* we start at ballot 1
              \* if the ballot is already aborted, don't vote to commit
              \* (using the primed version ensures we don't vote to commit and abort at the same time):
-            /\  \neg voteToAbort'[n][b] \/ acceptedAborted'[n][b]
+            /\  \neg (voteToAbort'[n][b] \/ acceptedAborted'[n][b])
              \* the prime allows us to consider prepared something we accepted committed in this very step:
             /\  IsPrepared(n, b)'
         /\  voteToCommit' = [voteToCommit EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
         \* we vote to commit at most one value per ballot number:
         /\  \A b1,b2 \in Ballot : voteToCommit'[n][b1] /\ voteToCommit'[n][b2] /\ b1.counter = b2.counter => b1.value = b2.value
-    /\  UNCHANGED <<externalized>>
-    \* /\  \E B \in SUBSET Ballot :
-    \*     /\  \A b \in B : \E Q \in Quorum :
-    \*             \A n2 \in Q \ byz : acceptedCommitted[n2][b]
-    \*     /\  externalized' = [externalized EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
+    /\  \E B \in SUBSET Ballot :
+        /\  \A b \in B : \E Q \in Quorum :
+                \A n2 \in Q \ byz : acceptedCommitted[n2][b]
+        /\  externalized' = [externalized EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
 
 ByzantineHavoc ==
     /\ \E x \in [byz -> [Ballot -> BOOLEAN]] :
@@ -101,7 +100,7 @@ ByzantineHavoc ==
 
 Next ==
     \/ \E n \in N : Step(n)
-    \* \/  ByzantineHavoc
+    \/  ByzantineHavoc
 
 vars == <<voteToAbort, acceptedAborted, voteToCommit, acceptedCommitted, externalized, byz>>
 
@@ -119,22 +118,22 @@ InductiveInvariant ==
         /\  \A b \in Ballot :
             /\  voteToCommit[n][b] => (\neg voteToAbort[n][b]) \/ acceptedAborted[n][b]
             /\  voteToCommit[n][b] \/ acceptedCommitted[n][b] \/ externalized[n][b] => b.counter > 0
-            \* /\  \A b2 \in Ballot :
-            \*         voteToCommit[n][b] /\ voteToCommit[n][b2] /\ b # b2 => b.counter # b2.counter
-    \*         /\  acceptedAborted[n][b] => \E Q \in Quorum :
-    \*                 \A n2 \in Q \ byz : voteToAbort[n2][b]
-    \*         /\  acceptedCommitted[n][b] => \E Q \in Quorum :
-    \*                 \A n2 \in Q \ byz : voteToCommit[n2][b]
-    \*         /\  externalized[n][b] => \E Q \in Quorum :
-    \*                 \A n2 \in Q \ byz : acceptedCommitted[n2][b]
-    \*         /\  voteToCommit[n][b] =>
-    \*             \/  b.counter = 1
-    \*             \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) =>
-    \*                     \E Q \in Quorum : \A n2 \in Q \ byz : acceptedAborted[n2][b2]
-    \*             \/  \E cnt \in BallotNumber :
-    \*                 /\  cnt < b.counter
-    \*                 /\  acceptedCommitted[n][[counter |-> cnt, value |-> b.value]]
-    \*         /\  acceptedAborted[n][b] => \A Q \in Quorum : \E n2 \in Q \ byz : \neg voteToCommit[n2][b]
-    \* /\  Agreement
+            /\  \A b2 \in Ballot :
+                    voteToCommit[n][b] /\ voteToCommit[n][b2] /\ b # b2 => b.counter # b2.counter
+            /\  acceptedAborted[n][b] => \E Q \in Quorum :
+                    \A n2 \in Q \ byz : voteToAbort[n2][b]
+            /\  acceptedCommitted[n][b] => \E Q \in Quorum :
+                    \A n2 \in Q \ byz : voteToCommit[n2][b]
+            /\  externalized[n][b] => \E Q \in Quorum :
+                    \A n2 \in Q \ byz : acceptedCommitted[n2][b]
+            /\  voteToCommit[n][b] =>
+                \/  b.counter = 1
+                \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) =>
+                        \E Q \in Quorum : \A n2 \in Q \ byz : acceptedAborted[n2][b2]
+                \/  \E cnt \in BallotNumber :
+                    /\  cnt < b.counter
+                    /\  acceptedCommitted[n][[counter |-> cnt, value |-> b.value]]
+            /\  acceptedAborted[n][b] => \A Q \in Quorum : \E n2 \in Q \ byz : \neg voteToCommit[n2][b]
+    /\  Agreement
 
 ==============================================
