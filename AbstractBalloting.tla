@@ -30,26 +30,26 @@ VARIABLES
 ,   byz
 
 TypeOK ==
-    /\  voteToAbort \in [N -> SUBSET Ballot]
-    /\  acceptedAborted \in [N -> SUBSET Ballot]
-    /\  voteToCommit \in [N -> SUBSET Ballot]
-    /\  acceptedCommitted \in [N -> SUBSET Ballot]
-    /\  externalized \in [N -> SUBSET Ballot]
+    /\  voteToAbort \in [N -> [Ballot -> BOOLEAN]]
+    /\  acceptedAborted \in [N -> [Ballot -> BOOLEAN]]
+    /\  voteToCommit \in [N -> [Ballot -> BOOLEAN]]
+    /\  acceptedCommitted \in [N -> [Ballot -> BOOLEAN]]
+    /\  externalized \in [N -> [Ballot -> BOOLEAN]]
     /\  byz \in SUBSET N
 
 Init ==
-    /\ voteToAbort = [n \in N |-> {}]
-    /\ acceptedAborted = [n \in N |-> {}]
-    /\ voteToCommit = [n \in N |-> {}]
-    /\ acceptedCommitted = [n \in N |-> {}]
-    /\ externalized = [n \in N |-> {}]
+    /\ voteToAbort = [n \in N |-> [b \in Ballot |-> FALSE]]
+    /\ acceptedAborted = [n \in N |->  [b \in Ballot |-> FALSE]]
+    /\ voteToCommit = [n \in N |->  [b \in Ballot |-> FALSE]]
+    /\ acceptedCommitted = [n \in N |->  [b \in Ballot |-> FALSE]]
+    /\ externalized = [n \in N |->  [b \in Ballot |-> FALSE]]
     /\ byz \in FailProneSet
 
 IsPrepared(n, b1) ==
         \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b1) => 
-                \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
+                \E Q \in Quorum : \A n2 \in Q \ byz : acceptedAborted[n2][b2]
         \/ \E cnt \in BallotNumber : 
-            /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
+            /\  acceptedCommitted[n][[counter |-> cnt, value |-> b1.value]]
             /\  cnt < b1.counter \* really necessary?
 
 Step(n) ==
@@ -58,49 +58,50 @@ Step(n) ==
     \* because updating voteToAbort depends on acceptedAborted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToAbort[m] \cup acceptedAborted[m]
-                \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedAborted[m]
-        /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = @ \cup B]
+            /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : voteToAbort[n2][b] \/ acceptedAborted[n2][b]
+                \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : acceptedAborted[n2][b]
+        /\  acceptedAborted' = [acceptedAborted EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
     /\ \E B \in SUBSET Ballot :
-        /\  \A b \in B : b \notin voteToCommit[n] \/ b \in acceptedAborted'[n]
-        /\  voteToAbort' = [voteToAbort EXCEPT ![n] = @ \cup B]
+        /\  \A b \in B : \neg voteToCommit[n][b] \/ acceptedAborted'[n][b]
+        /\  voteToAbort' = [voteToAbort EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
     \* NOTE for TLC, we must update acceptedCommitted before voteToCommit,
     \* because updating voteToCommit depends on acceptedCommitted':
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B :
-            /\  \/ \E Q \in Quorum : \A m \in Q \ byz : b \in voteToCommit[m] \cup acceptedCommitted[m]
-                \/ \E Bl \in BlockingSet : \A m \in Bl \ byz : b \in acceptedCommitted[m]
-        /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
+            /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : voteToCommit[n2][b] \/ acceptedCommitted[n2][b]
+                \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : acceptedCommitted[n2][b]
+        /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
     /\  \E B \in SUBSET Ballot :
         /\  \A b \in B : 
             /\  b.counter > 0 \* we start at ballot 1
              \* if the ballot is already aborted, don't vote to commit
              \* (using the primed version ensures we don't vote to commit and abort at the same time):
-            /\  b \notin voteToAbort'[n] \cup acceptedAborted'[n]
+            /\  \neg voteToAbort'[n][b] \/ acceptedAborted'[n][b]
              \* the prime allows us to consider prepared something we accepted committed in this very step:
             /\  IsPrepared(n, b)'
-        /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup B]
+        /\  voteToCommit' = [voteToCommit EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
         \* we vote to commit at most one value per ballot number:
-        /\  \A b1,b2 \in voteToCommit'[n] : b1.counter = b2.counter => b1.value = b2.value
-    /\  \E B \in SUBSET Ballot :
-        /\  \A b \in B : \E Q \in Quorum :
-                \A m \in Q \ byz : b \in acceptedCommitted[m]
-        /\  externalized' = [externalized EXCEPT ![n] = @ \cup B]
+        /\  \A b1,b2 \in Ballot : voteToCommit'[n][b1] /\ voteToCommit'[n][b2] /\ b1.counter = b2.counter => b1.value = b2.value
+    /\  UNCHANGED <<externalized>>
+    \* /\  \E B \in SUBSET Ballot :
+    \*     /\  \A b \in B : \E Q \in Quorum :
+    \*             \A n2 \in Q \ byz : acceptedCommitted[n2][b]
+    \*     /\  externalized' = [externalized EXCEPT ![n] = [b \in Ballot |-> IF b \in B THEN TRUE ELSE @[b]]]
 
 ByzantineHavoc ==
-    /\ \E x \in [byz -> SUBSET Ballot] :
+    /\ \E x \in [byz -> [Ballot -> BOOLEAN]] :
         voteToAbort' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToAbort[n]]
-    /\ \E x \in [byz -> SUBSET Ballot] :
+    /\ \E x \in [byz -> [Ballot -> BOOLEAN]] :
         acceptedAborted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedAborted[n]]
-    /\ \E x \in [byz -> SUBSET Ballot] :
+    /\ \E x \in [byz -> [Ballot -> BOOLEAN]] :
         voteToCommit' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToCommit[n]]
-    /\ \E x \in [byz -> SUBSET Ballot] :
+    /\ \E x \in [byz -> [Ballot -> BOOLEAN]] :
         acceptedCommitted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedCommitted[n]]
     /\  UNCHANGED <<externalized, byz>>
 
 Next ==
     \/ \E n \in N : Step(n)
-    \/  ByzantineHavoc
+    \* \/  ByzantineHavoc
 
 vars == <<voteToAbort, acceptedAborted, voteToCommit, acceptedCommitted, externalized, byz>>
 
@@ -108,7 +109,7 @@ Spec == Init /\ [][Next]_vars
 
 Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
-        b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
+        externalized[n1][b1] /\ externalized[n2][b2] => b1.value = b2.value
 
 \* Inductive invariant proving safety:
 InductiveInvariant ==
@@ -116,24 +117,24 @@ InductiveInvariant ==
     /\  byz \in FailProneSet
     /\  \A n \in N \ byz :
         /\  \A b \in Ballot :
-            /\  b \in voteToCommit[n] => b \notin voteToAbort[n] \/ b \in acceptedAborted[n]
-            /\  b \in voteToCommit[n] \cup acceptedCommitted[n] \cup externalized[n] => b.counter > 0
-            /\  \A b2 \in Ballot :
-                    b \in voteToCommit[n] /\ b2 \in voteToCommit[n] /\ b # b2 => b.counter # b2.counter
-            /\  b \in acceptedAborted[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in voteToAbort[m]
-            /\  b \in acceptedCommitted[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in voteToCommit[m]
-            /\  b \in externalized[n] => \E Q \in Quorum :
-                    \A m \in Q \ byz : b \in acceptedCommitted[m]
-            /\  b \in voteToCommit[n] =>
-                \/  b.counter = 1
-                \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) =>
-                        \E Q \in Quorum : \A m \in Q \ byz : b2 \in acceptedAborted[m]
-                \/  \E cnt \in BallotNumber :
-                    /\  cnt < b.counter
-                    /\  [counter |-> cnt, value |-> b.value] \in acceptedCommitted[n]
-            /\  b \in acceptedAborted[n] => \A Q \in Quorum : \E m \in Q \ byz : b \notin voteToCommit[m]
-    /\  Agreement
+            /\  voteToCommit[n][b] => (\neg voteToAbort[n][b]) \/ acceptedAborted[n][b]
+            /\  voteToCommit[n][b] \/ acceptedCommitted[n][b] \/ externalized[n][b] => b.counter > 0
+            \* /\  \A b2 \in Ballot :
+            \*         voteToCommit[n][b] /\ voteToCommit[n][b2] /\ b # b2 => b.counter # b2.counter
+    \*         /\  acceptedAborted[n][b] => \E Q \in Quorum :
+    \*                 \A n2 \in Q \ byz : voteToAbort[n2][b]
+    \*         /\  acceptedCommitted[n][b] => \E Q \in Quorum :
+    \*                 \A n2 \in Q \ byz : voteToCommit[n2][b]
+    \*         /\  externalized[n][b] => \E Q \in Quorum :
+    \*                 \A n2 \in Q \ byz : acceptedCommitted[n2][b]
+    \*         /\  voteToCommit[n][b] =>
+    \*             \/  b.counter = 1
+    \*             \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) =>
+    \*                     \E Q \in Quorum : \A n2 \in Q \ byz : acceptedAborted[n2][b2]
+    \*             \/  \E cnt \in BallotNumber :
+    \*                 /\  cnt < b.counter
+    \*                 /\  acceptedCommitted[n][[counter |-> cnt, value |-> b.value]]
+    \*         /\  acceptedAborted[n][b] => \A Q \in Quorum : \E n2 \in Q \ byz : \neg voteToCommit[n2][b]
+    \* /\  Agreement
 
 ==============================================

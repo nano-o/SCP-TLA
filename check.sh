@@ -17,7 +17,7 @@ case "$1" in
         shift
         FILE="Apa${2}.tla"
         $APA/bin/apalache-mc check --init=Init --inv=$1 --length=0 $FILE
-        JVM_ARGS="-Xmx${MEM}" $APA/bin/apalache-mc check --tuning-options=search.invariant.mode=after:"search.invariantFilter=1->.*:smt.randomSeed=${RANDOM}" --init=$1 --inv=$1 --length=1 $FILE
+        JVM_ARGS="-Xmx${MEM}" $APA/bin/apalache-mc check --smt-encoding=oopsla19 --tuning-options=search.invariant.mode=after:"search.invariantFilter=1->.*:smt.randomSeed=${RANDOM}" --init=$1 --inv=$1 --length=1 $FILE
         ;;
     -implication)
         shift
