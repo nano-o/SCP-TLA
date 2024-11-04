@@ -10,7 +10,8 @@ CONSTANTS
 ,   Quorum \* the set of quorums
 ,   FailProneSet \* set of sets of nodes; one of them must include all failed nodes
 
-\* ASSUME \E n \in Nat : BallotNumber = 0..n
+ASSUME \E max \in BallotNumber : \A n \in BallotNumber :
+    0 <= n /\ n <= max
 
 Max(x, y) == IF x > y THEN x ELSE y
 Min(x, y) == IF x < y THEN x ELSE y
@@ -21,7 +22,7 @@ BlockingSet == {B \in SUBSET N :
 someValue == CHOOSE v \in V : TRUE
 
 Ballot == [counter : BallotNumber, value : V]
-NullBallot == [counter |-> -1, value |-> someValue]
+nullBallot == [counter |-> -1, value |-> someValue]
 BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]
 
 \* LessThan predicate for comparing two ballots

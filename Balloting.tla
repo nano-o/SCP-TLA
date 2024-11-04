@@ -106,12 +106,12 @@ VARIABLES
 ,   byz \* the set of Byzantine nodes
 
 Init ==
-    /\ ballot = [n \in N |-> NullBallot]
+    /\ ballot = [n \in N |-> nullBallot]
     /\ phase = [n \in N |-> "PREPARE"]
-    /\ prepared = [n \in N |-> NullBallot]
+    /\ prepared = [n \in N |-> nullBallot]
     /\ aCounter = [n \in N |-> 0]
-    /\ h = [n \in N |-> NullBallot]
-    /\ c = [n \in N |-> NullBallot]
+    /\ h = [n \in N |-> nullBallot]
+    /\ c = [n \in N |-> nullBallot]
     /\ sent = [n \in N |-> {}]
     /\ byz \in FailProneSet
 
@@ -204,9 +204,9 @@ AcceptPrepared(n, b) ==
     /\  \/ \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : VotesToPrepare(b, msg)
         \/ \E B \in BlockingSet : \A m \in B : \E msg \in sent[m] : AcceptsPrepared(b, msg)
     /\  UpdatePrepared(n, b)
-    \* Reset c to NullBallot if it has been aborted:
+    \* Reset c to nullBallot if it has been aborted:
     /\  IF c[n].counter > -1 /\ Aborted(c[n], aCounter'[n], prepared'[n])
-        THEN c' = [c EXCEPT ![n] = NullBallot]
+        THEN c' = [c EXCEPT ![n] = nullBallot]
         ELSE UNCHANGED c
     /\  UNCHANGED <<ballot, phase, h, sent, byz>>
 
@@ -220,11 +220,11 @@ ConfirmPrepared(n, b) ==
     /\  IF prepared[n] \prec b \* confirmed prepared implies accepted prepared
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter>>
-    \* Update c (either reset to NullBallot, if it has been aborted, or set it to b):
+    \* Update c (either reset to nullBallot, if it has been aborted, or set it to b):
     /\  IF  /\  c[n].counter > -1
             /\  \/  Aborted(c[n], aCounter'[n], prepared'[n])
                 \/  LessThanAndIncompatible(c[n], b)
-        THEN c' = [c EXCEPT ![n] = NullBallot]
+        THEN c' = [c EXCEPT ![n] = nullBallot]
         ELSE
             IF  /\  c[n].counter = -1
                 /\  b = ballot[n]
