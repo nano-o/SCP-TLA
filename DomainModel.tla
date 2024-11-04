@@ -22,7 +22,8 @@ BlockingSet == {B \in SUBSET N :
 someValue == CHOOSE v \in V : TRUE
 
 Ballot == [counter : BallotNumber, value : V]
-nullBallot == [counter |-> -1, value |-> someValue]
+bal(c,v) == [counter |-> c, value |-> v]
+nullBallot == bal(-1, someValue)
 BallotOrNull == [counter : BallotNumber\cup {-1}, value : V]
 
 \* LessThan predicate for comparing two ballots
