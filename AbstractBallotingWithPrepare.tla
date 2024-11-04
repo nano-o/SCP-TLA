@@ -37,7 +37,7 @@ IncreaseBallotCounter(n, c) ==
     /\  c > ballot[n].counter
     /\  IF h[n] # nullBallot
         THEN ballot' = [ballot EXCEPT ![n] = bal(c, h[n].value)]
-        ELSE \E v \in V : ballot' = [ballot EXCEPT ![n] = bal(c, v)]]
+        ELSE \E v \in V : ballot' = [ballot EXCEPT ![n] = bal(c, v)]
     /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = @ \cup {ballot[n]'}]
     /\  UNCHANGED <<h, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
