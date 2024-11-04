@@ -29,7 +29,7 @@ balloting-refinement: $(TLA_TOOLS_JAR)
 %.pdf: %.tla
 	java -cp tla2tools.jar tla2tex.TLA -shade -ps -latexCommand pdflatex $<
 
-PDF_FILES := Balloting.pdf AbstractBalloting.pdf Nomination.pdf NominationPlusCal.pdf
+PDF_FILES := Balloting.pdf AbstractBalloting.pdf Nomination.pdf NominationPlusCal.pdf AbstractBallotingWithPrepare.pdf
 typeset: $(PDF_FILES)
 
 abwp-tlc: $(TLA_TOOLS_JAR)
