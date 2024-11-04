@@ -35,6 +35,7 @@ Init ==
 IncreaseBallotCounter(n, c) ==
     /\  c > 0
     /\  c > ballot[n].counter
+    /\  h[n].counter <= c
     /\  IF h[n] # nullBallot
         THEN ballot' = [ballot EXCEPT ![n] = bal(c, h[n].value)]
         ELSE \E v \in V : ballot' = [ballot EXCEPT ![n] = bal(c, v)]
@@ -48,21 +49,18 @@ AcceptPrepared(n, b) ==
     /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz>>
 
 ConfirmPrepared(n, b) ==
+    /\  b.counter > -1
     /\  h[n] \prec b
     /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
     /\  h' = [h EXCEPT ![n] = b]
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
-CanVoteToCommit(n, b) ==
-    /\  b = ballot[n]
-    /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) => b2 \notin voteToPrepare[n] \cup acceptedPrepared[n]
-    /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
-        \/ \E cnt \in BallotNumber :
-            /\  cnt < b.counter
-            /\ bal(cnt, b.value) \in acceptedCommitted[n]
-
 VoteToCommit(n, b) ==
-    /\  CanVoteToCommit(n, b)
+    /\  b = ballot[n]
+    /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) =>
+            b2 \notin voteToPrepare[n] \cup acceptedPrepared[n]
+    /\  b \prec h[n] => b.value = h[n].value
+    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  IF h[n] \preceq b
         THEN h' = [h EXCEPT ![n] = b]
@@ -111,17 +109,44 @@ Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
 
-Invariant ==
+InductiveInvariant ==
+    \* First the boring stuff:
+    /\  TypeOK
+    /\  byz \in FailProneSet
     /\  \A n \in N \ byz, c1,c2 \in BallotNumber, v1,v2 \in V :
-        LET b1 == bal(c1,v2) b2 == bal(c2,v2) IN
-        /\  bal(c1,v1) \in acceptedPrepared[n] /\ bal(c1,v2) \in acceptedPrepared[n] => v1 = v2
-        /\  /\  b1 \in acceptedCommitted[n]
-            /\  b2 \in acceptedPrepared[n] 
-            /\  b1 \prec b2
-            =>  b1.value = b2.value
+        LET b1 == bal(c1,v1) b2 == bal(c2,v2) IN
+        /\  b1 \in acceptedPrepared[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToPrepare[n2]
+        /\  b1 \in acceptedCommitted[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToCommit[n2]
+        /\  h[n].counter > 1 => \E Q \in Quorum : \A n2 \in Q \ byz : h[n] \in acceptedPrepared[n2]
+        /\  b1 \in externalized[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedCommitted[n2]
+        /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] =>
+            /\  b1.counter <= ballot[n].counter
+            /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
+        /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
+        /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
         /\  b1 \in voteToCommit[n] =>
-            \/  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
-            \/  \E b3 \in Ballot : b3 \prec b1 /\ b3.value = b1.value /\ b3 \in acceptedCommitted[n]
+                /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
+                /\  b1 \preceq h[n]
+        \* Next, the real meat:
+        /\  /\  b2 \in voteToPrepare[n]
+            /\  LessThanAndIncompatible(b1, b2)
+            /\  b1 \in voteToCommit[n]
+            =>  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \notin voteToCommit[n2]
+        \* /\  \A n2 \in N \ byz :
+        \*     /\  b1 \in acceptedCommitted[n]
+        \*     /\  b2 \in acceptedPrepared[n2]
+        \*     /\  b1 \prec b2
+        \*     =>  b1.value = b2.value
+
+        \* /\  /\  b1 \in voteToCommit[n]
+        \*     /\  LessThanAndIncompatible(b1, b2)
+        \*     /\  b2 \in voteToPrepare[n]
+        \*     =>  \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in acceptedPrepared[n2]
+        \* /\  /\  b1 \in acceptedCommitted[n]
+        \*     /\  b2 \in acceptedPrepared[n] 
+        \*     /\  b1 \prec b2
+        \*     =>  b1.value = b2.value
+        \* /\  \A n2 \in N \ byz : b1 \in externalized[n] /\ b2 \in externalized[n2] => b1.value = b2.value
 
 ==============================================
 

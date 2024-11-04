@@ -19,7 +19,7 @@ Min(x, y) == IF x < y THEN x ELSE y
 BlockingSet == {B \in SUBSET N :
     \A Q \in Quorum : Q \cap B # {}}
 
-someValue == CHOOSE v \in V : TRUE
+someValue == CHOOSE v \in V : TRUE \* NOTE there is a bug in Apalache that makes this non-determined
 
 Ballot == [counter : BallotNumber, value : V]
 bal(c,v) == [counter |-> c, value |-> v]

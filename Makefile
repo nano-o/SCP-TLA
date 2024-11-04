@@ -4,7 +4,7 @@ APA=apalache-${APA_VERSION}
 APA_ARCHIVE=$(APA).tgz
 TLA_TOOLS_JAR=tla2tools.jar
 TLA_TOOLS_JAR_URL=https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-TLC_WORKERS=20
+TLC_WORKERS=6
 TLC_OFFHEAP_MEMORY=35G
 TLC_HEAP=15G
 
@@ -36,6 +36,6 @@ abwp-tlc: $(TLA_TOOLS_JAR)
 	java -Xmx${TLC_HEAP} -XX:+UseParallelGC -XX:MaxDirectMemorySize=${TLC_OFFHEAP_MEMORY} -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -jar tla2tools.jar -workers ${TLC_WORKERS} -checkpoint 30 -generateSpecTE TLCAbstractBallotingWithPrepare.tla
 
 abwp-apa: $(APA)
-	APA=$(APA) ./check.sh -typecheck AbstractBallotingWithPrepare
+	APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBallotingWithPrepare
 
 .PHONY: abstract-scp-safety balloting-refinement typeset all
