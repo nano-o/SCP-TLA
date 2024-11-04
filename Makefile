@@ -4,9 +4,9 @@ APA=apalache-${APA_VERSION}
 APA_ARCHIVE=$(APA).tgz
 TLA_TOOLS_JAR=tla2tools.jar
 TLA_TOOLS_JAR_URL=https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-TLC_WORKERS=4
-TLC_OFFHEAP_MEMORY=15G
-TLC_HEAP=8G
+TLC_WORKERS=20
+TLC_OFFHEAP_MEMORY=35G
+TLC_HEAP=15G
 
 all:
 
@@ -31,5 +31,11 @@ balloting-refinement: $(TLA_TOOLS_JAR)
 
 PDF_FILES := Balloting.pdf AbstractBalloting.pdf Nomination.pdf NominationPlusCal.pdf
 typeset: $(PDF_FILES)
+
+abwp-tlc: $(TLA_TOOLS_JAR)
+	java -Xmx${TLC_HEAP} -XX:+UseParallelGC -XX:MaxDirectMemorySize=${TLC_OFFHEAP_MEMORY} -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -jar tla2tools.jar -workers ${TLC_WORKERS} -checkpoint 30 -generateSpecTE TLCAbstractBallotingWithPrepare.tla
+
+abwp-apa: $(APA)
+	APA=$(APA) ./check.sh -typecheck AbstractBallotingWithPrepare
 
 .PHONY: abstract-scp-safety balloting-refinement typeset all
