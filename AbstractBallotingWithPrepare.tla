@@ -1,5 +1,20 @@
 ------------- MODULE AbstractBallotingWithPrepare -------------
 
+(**************************************************************************************)
+(* This is a specification of SCP's balloting protocol. We work at a high level of    *)
+(* abstraction where we do not explicitely model messges. Instead, we track what      *)
+(* statements are voted/accepted prepared and committed by each node. What we do      *)
+(* model explicitely is how each node n votes and accepts statements based on its     *)
+(* current ballot ballot[n] and its highest confirmed-prepared ballot h[n].           *)
+(*                                                                                    *)
+(* We provide an inductive invariant that implies the agreement property, and we      *)
+(* check its inductiveness exhaustively for small instances of the domain model.      *)
+(*                                                                                    *)
+(* An informal specification of SCP can be found at:                                  *)
+(* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
+(**************************************************************************************)
+
+
 EXTENDS DomainModel
 
 VARIABLES
@@ -10,7 +25,7 @@ VARIABLES
 ,   voteToCommit
 ,   acceptedCommitted
 ,   externalized
-,   byz
+,   byz \* the set of malicious nodes
 
 TypeOK ==
     /\  ballot \in [N -> BallotOrNull]
@@ -24,14 +39,30 @@ TypeOK ==
 
 Init ==
     /\ ballot = [n \in N |-> nullBallot] \* current ballot of each node
-    /\ h =  [n \in N |-> nullBallot] \* current highest confirmed-prepared of each node
+    /\ h =  [n \in N |-> nullBallot] \* current highest confirmed-prepared ballot of each node
     /\ voteToPrepare = [n \in N |-> {}]
     /\ acceptedPrepared = [n \in N |-> {}]
     /\ voteToCommit = [n \in N |-> {}]
     /\ acceptedCommitted = [n \in N |-> {}]
     /\ externalized = [n \in N |-> {}]
-    /\ byz \in FailProneSet \* the set of malicious nodes
+    /\ byz \in FailProneSet \* byz is initially set to an arbitrary fail-prone set
 
+(***********************************************************************************)
+(* Node n enters a new ballot and votes to prepare it. Note that n votes to        *)
+(* prepare its new ballot ballot'[n] regardless of whether it has previously vote  *)
+(* to commit an incompatible ballot b. The main subtlety of the protocol is that   *)
+(* this is okay because:                                                           *)
+(*                                                                                 *)
+(*     1) We must have b \prec h[n] because we, when n votes to commit b (see      *)
+(*     VoteToCommit), it sets h[n] = b if h[n] \prec b, and subsequently h[n] can  *)
+(*     only grow, and                                                              *)
+(*                                                                                 *)
+(*     2) therefore, if h[n].value # b.value, then n confirmed h[n] as prepared    *)
+(*     (by definition of how h[n] is updated) and thus we know that, even though n *)
+(*     voted to commit b, b can never gather a quorum of votes to commit.          *)
+(*                                                                                 *)
+(* Note how this reasoning appears in the inductive invariant below.               *)
+(***********************************************************************************)
 IncreaseBallotCounter(n, c) ==
     /\  c > 0
     /\  c > ballot[n].counter
@@ -42,9 +73,13 @@ IncreaseBallotCounter(n, c) ==
     /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = @ \cup {ballot[n]'}]
     /\  UNCHANGED <<h, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
+(************************************************************************************************)
+(* Next we describe when a node accepts and confirms ballots prepared. Nothing surprising here. *)
+(************************************************************************************************)
 AcceptPrepared(n, b) ==
     /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
         \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedPrepared[n2]
+    \* NOTE: here we could check that nothing less-and-incompatible is accepted committed. That would simplify the agreement proof a lot but complicate the liveness proof. In any case, it is an invariant that nothing less-and-incompatible is accepted committed at this point.
     /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz>>
 
@@ -55,6 +90,13 @@ ConfirmPrepared(n, b) ==
     /\  h' = [h EXCEPT ![n] = b]
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
+
+(*******************************************************************************)
+(* When a node votes to commit a ballot, it must check that it has not already *)
+(* voted or accepted to abort it. This is crucial to avoid externalizing two   *)
+(* different values in two different ballots. We also update h[n] if needed to *)
+(* reflect the new highest-confirmed prepared ballot.                          *)
+(*******************************************************************************)
 VoteToCommit(n, b) ==
     /\  b.counter > 0
     /\  b = ballot[n]
@@ -67,6 +109,11 @@ VoteToCommit(n, b) ==
         THEN h' = [h EXCEPT ![n] = b]
         ELSE UNCHANGED h
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz>>
+
+(********************************************************************************)
+(* Next we describe when a node accepts and confirms ballots committed. Nothing *)
+(* surprising here.                                                             *)
+(********************************************************************************)
 
 AcceptCommitted(n, b) ==
     /\  b = ballot[n]
@@ -92,6 +139,9 @@ Externalize(n, b) ==
 \*         acceptedCommitted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedCommitted[n]]
 \*     /\  UNCHANGED <<h, externalized, byz>>
 
+(***************************************)
+(* Finally we put everything together: *)
+(***************************************)
 Next == 
     \/  \E n \in N \ byz, c \in BallotNumber, v \in V :
         LET b == bal(c, v) IN
@@ -111,6 +161,9 @@ Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
 
+(**********************************************************)
+(* Here is an inductive invariant that implies agreement: *)
+(**********************************************************)
 InductiveInvariant ==
     \* First, the boring stuff:
     /\  TypeOK
@@ -130,7 +183,7 @@ InductiveInvariant ==
         /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
         /\  b1 \in voteToCommit[n] =>
                 /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
-                /\  b1 \preceq h[n]
+                /\  b1 \preceq h[n] \* note this is important as it implies that, if we later vote to abort b1, we must have confirmed b1 aborted
         \* Next, the crux of the matter:
         \* (in short, a node only overrides "commit v" if it is sure that "commit v" cannot reach quorum threshold)
         /\  /\  b1 \in voteToCommit[n]
@@ -140,5 +193,11 @@ InductiveInvariant ==
                     b1 \notin voteToCommit[n2] /\ ballot[n2].counter > b1.counter
     \* Finally, our goal:
     /\  Agreement
+
+AcceptNeverContradictory == \A b1,b2 \in Ballot, n1,n2 \in N \ byz :
+    /\  b1 \in acceptedCommitted[n1]
+    /\  b2 \in acceptedPrepared[n2]
+    /\  b1 \prec b2
+    =>  b1.value = b2.value
 
 ==============================================
