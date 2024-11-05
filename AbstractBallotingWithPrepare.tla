@@ -56,6 +56,7 @@ ConfirmPrepared(n, b) ==
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
 VoteToCommit(n, b) ==
+    /\  b.counter > 0
     /\  b = ballot[n]
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) =>
             b2 \notin voteToPrepare[n] \cup acceptedPrepared[n]
@@ -103,6 +104,7 @@ Next ==
     \* \/  ByzantineHavoc
 
 vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
+
 Spec == Init /\ [][Next]_vars
 
 Agreement ==
@@ -110,14 +112,16 @@ Agreement ==
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
 
 InductiveInvariant ==
-    \* First the boring stuff:
+    \* First, the boring stuff:
     /\  TypeOK
     /\  byz \in FailProneSet
     /\  \A n \in N \ byz, c1,c2 \in BallotNumber, v1,v2 \in V :
         LET b1 == bal(c1,v1) b2 == bal(c2,v2) IN
+        /\  ballot[n].counter > -1 => ballot[n].counter > 0
+        /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] => b1.counter > 0 /\ b1.counter <= ballot[n].counter
         /\  b1 \in acceptedPrepared[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToPrepare[n2]
         /\  b1 \in acceptedCommitted[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToCommit[n2]
-        /\  h[n].counter > 1 => \E Q \in Quorum : \A n2 \in Q \ byz : h[n] \in acceptedPrepared[n2]
+        /\  h[n].counter > 0 => \E Q \in Quorum : \A n2 \in Q \ byz : h[n] \in acceptedPrepared[n2]
         /\  b1 \in externalized[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedCommitted[n2]
         /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] =>
             /\  b1.counter <= ballot[n].counter
@@ -127,26 +131,14 @@ InductiveInvariant ==
         /\  b1 \in voteToCommit[n] =>
                 /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
                 /\  b1 \preceq h[n]
-        \* Next, the real meat:
-        /\  /\  b2 \in voteToPrepare[n]
+        \* Next, the crux of the matter:
+        \* (in short, a node only overrides "commit v" if it is sure that "commit v" cannot reach quorum threshold)
+        /\  /\  b1 \in voteToCommit[n]
             /\  LessThanAndIncompatible(b1, b2)
-            /\  b1 \in voteToCommit[n]
-            =>  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \notin voteToCommit[n2]
-        \* /\  \A n2 \in N \ byz :
-        \*     /\  b1 \in acceptedCommitted[n]
-        \*     /\  b2 \in acceptedPrepared[n2]
-        \*     /\  b1 \prec b2
-        \*     =>  b1.value = b2.value
-
-        \* /\  /\  b1 \in voteToCommit[n]
-        \*     /\  LessThanAndIncompatible(b1, b2)
-        \*     /\  b2 \in voteToPrepare[n]
-        \*     =>  \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in acceptedPrepared[n2]
-        \* /\  /\  b1 \in acceptedCommitted[n]
-        \*     /\  b2 \in acceptedPrepared[n] 
-        \*     /\  b1 \prec b2
-        \*     =>  b1.value = b2.value
-        \* /\  \A n2 \in N \ byz : b1 \in externalized[n] /\ b2 \in externalized[n2] => b1.value = b2.value
+            /\  b2 \in voteToPrepare[n]
+            =>  \A Q \in Quorum : \E n2 \in Q \ byz :
+                    b1 \notin voteToCommit[n2] /\ ballot[n2].counter > b1.counter
+    \* Finally, our goal:
+    /\  Agreement
 
 ==============================================
-

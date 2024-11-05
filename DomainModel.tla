@@ -37,6 +37,6 @@ LessThanOrEqual(b1, b2) ==
 b1 \preceq b2 == LessThanOrEqual(b1, b2)
 
 LessThanAndIncompatible(b1, b2) ==
-    LessThan(b1, b2) /\ b1.value # b2.value
+    b1 \prec b2 /\ b1.value # b2.value
 
 ==========================================
