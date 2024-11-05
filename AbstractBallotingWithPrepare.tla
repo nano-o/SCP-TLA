@@ -7,14 +7,19 @@
 (* model explicitely is how each node n votes and accepts statements based on its     *)
 (* current ballot ballot[n] and its highest confirmed-prepared ballot h[n].           *)
 (*                                                                                    *)
+(* We also do not model Byzantine behavior explicitly. Instead, whenever a node       *)
+(* checks that a set (a quorum or a blocking set) voted or accepted a statement,      *)
+(* it only checks that the non-Byzantine members of the set did so. This soundly      *)
+(* models what could happen under Byzantine behavior because Byzantine nodes,         *)
+(* being unconstrained, could have voted or accepted whatever is needed to make       *)
+(* the check pass.                                                                    *)
+(*                                                                                    *)
 (* We provide an inductive invariant that implies the agreement property, and we      *)
 (* check its inductiveness exhaustively for small instances of the domain model.      *)
 (*                                                                                    *)
 (* An informal specification of SCP can be found at:                                  *)
 (* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
 (**************************************************************************************)
-
-
 EXTENDS DomainModel
 
 VARIABLES
@@ -49,11 +54,11 @@ Init ==
 
 (***********************************************************************************)
 (* Node n enters a new ballot and votes to prepare it. Note that n votes to        *)
-(* prepare its new ballot ballot'[n] regardless of whether it has previously vote  *)
+(* prepare its new ballot ballot'[n] regardless of whether it has previously voted *)
 (* to commit an incompatible ballot b. The main subtlety of the protocol is that   *)
 (* this is okay because:                                                           *)
 (*                                                                                 *)
-(*     1) We must have b \prec h[n] because we, when n votes to commit b (see      *)
+(*     1) We must have b \prec h[n] because, when n votes to commit b (see         *)
 (*     VoteToCommit), it sets h[n] = b if h[n] \prec b, and subsequently h[n] can  *)
 (*     only grow, and                                                              *)
 (*                                                                                 *)
@@ -73,13 +78,18 @@ IncreaseBallotCounter(n, c) ==
     /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = @ \cup {ballot[n]'}]
     /\  UNCHANGED <<h, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
-(************************************************************************************************)
-(* Next we describe when a node accepts and confirms ballots prepared. Nothing surprising here. *)
-(************************************************************************************************)
+(**********************************************************************************)
+(* Next we describe when a node accepts and confirms ballots prepared. Nothing    *)
+(* surprising here.                                                               *)
+(*                                                                                *)
+(* Note that we could check that nothing less-and-incompatible is accepted        *)
+(* committed. That would simplify the agreement proof but complicate the liveness *)
+(* proof. In any case, it is an invariant that nothing less-and-incompatible is   *)
+(* accepted committed at this point (see AcceptNeverContradictory).               *)
+(**********************************************************************************)
 AcceptPrepared(n, b) ==
     /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
         \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedPrepared[n2]
-    \* NOTE: here we could check that nothing less-and-incompatible is accepted committed. That would simplify the agreement proof a lot but complicate the liveness proof. In any case, it is an invariant that nothing less-and-incompatible is accepted committed at this point.
     /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz>>
 
@@ -128,17 +138,6 @@ Externalize(n, b) ==
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz>>
 
-\* ByzantineHavoc ==
-\*     /\ \E x \in [byz -> SUBSET Ballot] :
-\*         voteToPrepare' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToPrepare[n]]
-\*     /\ \E x \in [byz -> SUBSET Ballot] :
-\*         acceptedPrepared' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedPrepared[n]]
-\*     /\ \E x \in [byz -> SUBSET Ballot] :
-\*         voteToCommit' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToCommit[n]]
-\*     /\ \E x \in [byz -> SUBSET Ballot] :
-\*         acceptedCommitted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedCommitted[n]]
-\*     /\  UNCHANGED <<h, externalized, byz>>
-
 (***************************************)
 (* Finally we put everything together: *)
 (***************************************)
@@ -151,7 +150,6 @@ Next ==
             \/  VoteToCommit(n, b)
             \/  AcceptCommitted(n, b)
             \/  Externalize(n, b)
-    \* \/  ByzantineHavoc
 
 vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
@@ -183,9 +181,9 @@ InductiveInvariant ==
         /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
         /\  b1 \in voteToCommit[n] =>
                 /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
-                /\  b1 \preceq h[n] \* note this is important as it implies that, if we later vote to abort b1, we must have confirmed b1 aborted
+                /\  b1 \preceq h[n] \* note this is important
         \* Next, the crux of the matter:
-        \* (in short, a node only overrides "commit v" if it is sure that "commit v" cannot reach quorum threshold)
+        \* (in short, a node only overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold)
         /\  /\  b1 \in voteToCommit[n]
             /\  LessThanAndIncompatible(b1, b2)
             /\  b2 \in voteToPrepare[n]
@@ -194,6 +192,7 @@ InductiveInvariant ==
     \* Finally, our goal:
     /\  Agreement
 
+\* An additional property implies by the inductive invariant:
 AcceptNeverContradictory == \A b1,b2 \in Ballot, n1,n2 \in N \ byz :
     /\  b1 \in acceptedCommitted[n1]
     /\  b2 \in acceptedPrepared[n2]
