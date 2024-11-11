@@ -183,7 +183,7 @@ InductiveInvariant ==
                 /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
                 /\  b1 \preceq h[n] \* note this is important
         \* Next, the crux of the matter:
-        \* (in short, a node only overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold)
+        \* (in short, a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold)
         /\  /\  b1 \in voteToCommit[n]
             /\  LessThanAndIncompatible(b1, b2)
             /\  b2 \in voteToPrepare[n]
