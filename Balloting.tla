@@ -57,8 +57,11 @@ MessageInvariant(m) ==
 \* This seems superfluous.
 \* I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
 
-\* Meaning of the messages in terms of logical, federated-voting messages.
-\* We will use this to show that this specification refines the AbstractBalloting specification.
+(*****************************************************************************)
+(* Meaning of the messages in terms of logical, federated-voting messages on *)
+(* abort/commit statements. We will use this to show that this specification *)
+(* refines the AbstractBallotingWithPrepare specification.                   *)
+(*****************************************************************************)
 LogicalMessages(m) ==
     CASE m.type = "PREPARE" -> [
             voteToAbort |-> {b \in Ballot :

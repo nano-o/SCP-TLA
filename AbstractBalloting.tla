@@ -9,14 +9,19 @@
 (* The goal if to then refine this specification to one that closely matches the      *)
 (* concrete `^SCP^' protocol.                                                         *)
 (*                                                                                    *)
-(* We provide an inductive invariant showing that, by following the 2                 *)
-(* ``restrictions on voting'' described in Section 3.5 of the above document,         *)
-(* safety is guaranteed.                                                              *)
+(* We provide an inductive invariant showing that agreement is guaranteed.            *)
 (*                                                                                    *)
-(* Note that it is not true that a validator never votes to commit and abort the      *)
-(* same ballot. This can happen when a validator votes to commit a ballot, but        *)
-(* then accepts to abort it because a blocking set accepted to abort it. Moreover,    *)
-(* it is necessary for liveness to allow this.                                        *)
+(* Note that a node may vote to commit a ballot and later vote to abort the same      *)
+(* ballot if it knows that commit cannot possibly reach quorum threshold. This can    *)
+(* happen when a validator votes to commit a ballot, but then accepts to abort it.    *)
+(* Moreover, it is necessary for liveness to allow this.                              *)
+(*                                                                                    *)
+(* Also note that we do not model Byzantine behavior explicitly. Instead, whenever    *)
+(* a node checks that a set (a quorum or a blocking set) voted or accepted a          *)
+(* statement, it only checks that the non-Byzantine members of the set did so.        *)
+(* This soundly models what could happen under Byzantine behavior because             *)
+(* Byzantine nodes, being unconstrained, could have voted or accepted whatever is     *)
+(* needed to make the check pass.                                                     *)
 (**************************************************************************************)
 
 EXTENDS DomainModel
@@ -45,12 +50,18 @@ Init ==
     /\ externalized = [n \in N |-> {}]
     /\ byz \in FailProneSet
 
+
+(********************************************************************************)
+(* The second disjunct allows voting to commit all higher ballot numbers once a *)
+(* ballot is accepted committed (see meaning of COMMIT message in the `^IETF^'  *)
+(* draft):                                                                      *)
+(********************************************************************************)
 IsPrepared(n, b1) ==
         \/  \A b2 \in Ballot : LessThanAndIncompatible(b2, b1) => 
                 \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in acceptedAborted[n2]
         \/ \E cnt \in BallotNumber : 
             /\ [counter |-> cnt, value |-> b1.value] \in acceptedCommitted[n]
-            /\  cnt < b1.counter \* really necessary?
+            /\  cnt < b1.counter \* really necessary? yes
 
 Step(n) ==
     /\  UNCHANGED <<byz>>
@@ -72,7 +83,7 @@ Step(n) ==
                 \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedCommitted[n2]
         /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup B]
     /\  \E B \in SUBSET Ballot :
-        /\  \A b \in B : 
+        /\  \A b \in B :
             /\  b.counter > 0 \* we start at ballot 1
              \* if the ballot is already aborted, don't vote to commit
              \* (using the primed version ensures we don't vote to commit and abort at the same time):
@@ -87,20 +98,8 @@ Step(n) ==
                 \A n2 \in Q \ byz : b \in acceptedCommitted[n2]
         /\  externalized' = [externalized EXCEPT ![n] = @ \cup B]
 
-ByzantineHavoc ==
-    /\ \E x \in [byz -> SUBSET Ballot] :
-        voteToAbort' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToAbort[n]]
-    /\ \E x \in [byz -> SUBSET Ballot] :
-        acceptedAborted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedAborted[n]]
-    /\ \E x \in [byz -> SUBSET Ballot] :
-        voteToCommit' = [n \in N |-> IF n \in byz THEN x[n] ELSE voteToCommit[n]]
-    /\ \E x \in [byz -> SUBSET Ballot] :
-        acceptedCommitted' = [n \in N |-> IF n \in byz THEN x[n] ELSE acceptedCommitted[n]]
-    /\  UNCHANGED <<externalized, byz>>
-
 Next ==
-    \/ \E n \in N : Step(n)
-    \/  ByzantineHavoc
+    \/ \E n \in N \ byz : Step(n)
 
 vars == <<voteToAbort, acceptedAborted, voteToCommit, acceptedCommitted, externalized, byz>>
 

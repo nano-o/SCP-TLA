@@ -2,7 +2,7 @@
 
 (**************************************************************************************)
 (* This is a specification of SCP's balloting protocol. We work at a high level of    *)
-(* abstraction where we do not explicitely model messges. Instead, we track what      *)
+(* abstraction where we do not explicitely model messages. Instead, we track what     *)
 (* statements are voted/accepted prepared and committed by each node. What we do      *)
 (* model explicitely is how each node n votes and accepts statements based on its     *)
 (* current ballot ballot[n] and its highest confirmed-prepared ballot h[n].           *)
