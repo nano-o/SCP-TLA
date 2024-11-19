@@ -23,7 +23,7 @@ $(TLA_TOOLS_JAR):
 abstractballoting-safety: $(APA)
 	APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBalloting
 
-balloting-refinement: $(TLA_TOOLS_JAR)
+balloting-refinement: $(TLA_TOOLS_JAR) TLCBalloting.cfg TLCBalloting.tla Balloting.tla AbstractBalloting.tla
 	java -Xmx${TLC_HEAP} -XX:+UseParallelGC -XX:MaxDirectMemorySize=${TLC_OFFHEAP_MEMORY} -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -jar tla2tools.jar -workers ${TLC_WORKERS} -checkpoint 30 -generateSpecTE TLCBalloting.tla
 
 %.pdf: %.tla

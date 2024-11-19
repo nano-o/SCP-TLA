@@ -100,16 +100,14 @@ ConfirmPrepared(n, b) ==
     /\  h' = [h EXCEPT ![n] = b]
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
-
 (*******************************************************************************)
 (* When a node votes to commit a ballot, it must check that it has not already *)
 (* voted or accepted to abort it. This is crucial to avoid externalizing two   *)
 (* different values in two different ballots. We also update h[n] if needed to *)
 (* reflect the new highest-confirmed prepared ballot.                          *)
 (*******************************************************************************)
-VoteToCommit(n, b) ==
+VoteToCommit(n) == LET b == ballot[n] IN
     /\  b.counter > 0
-    /\  b = ballot[n]
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) =>
             b2 \notin voteToPrepare[n] \cup acceptedPrepared[n]
     /\  b \prec h[n] => b.value = h[n].value
@@ -125,15 +123,13 @@ VoteToCommit(n, b) ==
 (* surprising here.                                                             *)
 (********************************************************************************)
 
-AcceptCommitted(n, b) ==
-    /\  b = ballot[n]
+AcceptCommitted(n) == LET b == ballot[n] IN
     /\  \/  \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToCommit[n2]
         \/  \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedCommitted[n2]
     /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, externalized, byz>>
 
-Externalize(n, b) == 
-    /\  b = ballot[n]
+Externalize(n) == LET b == ballot[n] IN
     /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedCommitted[n2]
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz>>
@@ -141,15 +137,15 @@ Externalize(n, b) ==
 (***************************************)
 (* Finally we put everything together: *)
 (***************************************)
-Next == 
-    \/  \E n \in N \ byz, c \in BallotNumber, v \in V :
+Next == \E n \in N \ byz :
+    \/  VoteToCommit(n)
+    \/  AcceptCommitted(n)
+    \/  Externalize(n)
+    \/  \E c \in BallotNumber, v \in V :
         LET b == bal(c, v) IN
             \/  IncreaseBallotCounter(n, c)
             \/  AcceptPrepared(n, b)
             \/  ConfirmPrepared(n, b)
-            \/  VoteToCommit(n, b)
-            \/  AcceptCommitted(n, b)
-            \/  Externalize(n, b)
 
 vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
