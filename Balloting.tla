@@ -40,59 +40,6 @@ SCPExternalize == [
 Message ==
     SCPPrepare \cup SCPCommit \cup SCPExternalize
 
-\* Some well-formedness conditions on messages:
-MessageInvariant(m) ==
-    /\  m.type = "PREPARE" =>
-        /\  m.ballot.counter > 0
-        /\  m.prepared.counter > -1 =>
-            /\  m.prepared \preceq m.ballot
-            /\  m.aCounter <= m.prepared.counter
-        /\  m.prepared.counter = -1 => m.aCounter = 0
-        /\  m.cCounter <= m.hCounter
-    /\  m.type = "COMMIT" =>
-        /\  m.cCounter > 0
-        /\  m.cCounter <= m.ballot.counter
-        /\  m.cCounter <= m.hCounter
-\* TODO: Page 13 mentions that we should have m.hCounter <= m.ballot.counter in a PREPARE message
-\* This seems superfluous.
-\* I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
-
-(*****************************************************************************)
-(* Meaning of the messages in terms of logical, federated-voting messages on *)
-(* abort/commit statements. We will use this to show that this specification *)
-(* refines the AbstractBallotingWithPrepare specification.                   *)
-(*****************************************************************************)
-LogicalMessages(m) ==
-    CASE m.type = "PREPARE" -> [
-            voteToAbort |-> {b \in Ballot :
-                LessThanAndIncompatible(b, m.ballot)},
-            acceptedAborted |-> {b \in Ballot :
-                \/ LessThanAndIncompatible(b, m.prepared)
-                \/ b.counter < m.aCounter},
-            confirmedAborted |->
-                IF m.hCounter = 0 THEN {}
-                ELSE {b \in Ballot :
-                    LET h == [counter |-> m.hCounter, value |-> m.ballot.value]
-                    IN  LessThanAndIncompatible(b, h)},
-            voteToCommit |-> IF m.cCounter = 0 THEN {}
-                ELSE {b \in Ballot :
-                    /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
-                    /\ b.value = m.ballot.value},
-            acceptedCommitted |-> {}]
-    []  m.type = "COMMIT" -> [
-            voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
-            acceptedAborted |->
-                LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
-                IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
-            confirmedAborted |->
-                LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
-                IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
-            voteToCommit |-> {b \in Ballot :
-                m.cCounter <= b.counter /\ b.value = m.ballot.value},
-            acceptedCommitted |-> {b \in Ballot :
-                /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
-                /\ b.value = m.ballot.value}]
-
 VARIABLES
     ballot \* ballot[n] is the current ballot being prepared or committed by node n
 ,   phase  \* phase[n] is the current phase of node n
@@ -358,6 +305,23 @@ Spec ==
 (* We now turn to correctness properties *)
 (*****************************************)
 
+\* Some well-formedness conditions on messages:
+MessageInvariant(m) ==
+    /\  m.type = "PREPARE" =>
+        /\  m.ballot.counter > 0
+        /\  m.prepared.counter > -1 =>
+            /\  m.prepared \preceq m.ballot
+            /\  m.aCounter <= m.prepared.counter
+        /\  m.prepared.counter = -1 => m.aCounter = 0
+        /\  m.cCounter <= m.hCounter
+    /\  m.type = "COMMIT" =>
+        /\  m.cCounter > 0
+        /\  m.cCounter <= m.ballot.counter
+        /\  m.cCounter <= m.hCounter
+\* TODO: Page 13 mentions that we should have m.hCounter <= m.ballot.counter in a PREPARE message
+\* This seems superfluous.
+\* I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
+
 Invariant ==
     /\  TypeOK
     /\  \A n \in N \ byz :
@@ -375,6 +339,42 @@ Invariant ==
                 /\  c[n].value = ballot[n].value
 
 \* Next we instantiate the AbstractBalloting specification
+
+(*****************************************************************************)
+(* Meaning of the messages in terms of logical, federated-voting messages on *)
+(* abort/commit statements. We will use this to show that this specification *)
+(* refines the AbstractBallotingWithPrepare specification.                   *)
+(*****************************************************************************)
+LogicalMessages(m) ==
+    CASE m.type = "PREPARE" -> [
+            voteToAbort |-> {b \in Ballot :
+                LessThanAndIncompatible(b, m.ballot)},
+            acceptedAborted |-> {b \in Ballot :
+                \/ LessThanAndIncompatible(b, m.prepared)
+                \/ b.counter < m.aCounter},
+            confirmedAborted |->
+                IF m.hCounter = 0 THEN {}
+                ELSE {b \in Ballot :
+                    LET hBall == [counter |-> m.hCounter, value |-> m.ballot.value]
+                    IN  LessThanAndIncompatible(b, hBall)},
+            voteToCommit |-> IF m.cCounter = 0 THEN {}
+                ELSE {b \in Ballot :
+                    /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
+                    /\ b.value = m.ballot.value},
+            acceptedCommitted |-> {}]
+    []  m.type = "COMMIT" -> [
+            voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
+            acceptedAborted |->
+                LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
+                IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
+            confirmedAborted |->
+                LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
+                IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
+            voteToCommit |-> {b \in Ballot :
+                m.cCounter <= b.counter /\ b.value = m.ballot.value},
+            acceptedCommitted |-> {b \in Ballot :
+                /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
+                /\ b.value = m.ballot.value}]
 
 voteToAbort == [n \in N |-> UNION {LogicalMessages(m).voteToAbort : m \in sent[n]}]
 acceptedAborted == [n \in N |-> UNION {LogicalMessages(m).acceptedAborted : m \in sent[n]}]
