@@ -42,63 +42,6 @@ SCPCommit == {Variant("COMMIT", m) : m \in [
 Message ==
     SCPPrepare \cup SCPCommit \* \cup SCPExternalize
 
-\* Some well-formedness conditions on messages:
-\* @type: $message => Bool;
-MessageInvariant(taggedMsg) ==
-    IF VariantTag(taggedMsg) = "PREPARE"
-    THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN
-        /\  m.ballot.counter > 0
-        /\  m.prepared.counter > -1 =>
-            /\  m.prepared \preceq m.ballot
-            /\  m.aCounter <= m.prepared.counter
-        /\  m.prepared.counter = -1 => m.aCounter = 0
-        /\  m.cCounter <= m.hCounter
-    ELSE IF VariantTag(taggedMsg) = "COMMIT"
-    THEN LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN
-        /\  m.cCounter > 0
-        /\  m.cCounter <= m.ballot.counter
-        /\  m.cCounter <= m.hCounter
-    ELSE TRUE
-\* TODO: Page 13 mentions that we should have m.hCounter <= m.ballot.counter in a PREPARE message
-\* This seems superfluous.
-\* I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
-
-\* Meaning of the messages in terms of logical, federated-voting messages.
-\* We will use this to show that this specification refines the AbstractBalloting specification.
-\* @type: $message => {voteToAbort : Set($ballot), acceptedAborted : Set($ballot), confirmedAborted : Set($ballot), voteToCommit : Set($ballot), acceptedCommitted : Set($ballot)};
-LogicalMessages(taggedMsg) ==
-    IF VariantTag(taggedMsg) = "PREPARE"
-    THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN [
-        voteToAbort |-> {b \in Ballot :
-            LessThanAndIncompatible(b, m.ballot)},
-        acceptedAborted |-> {b \in Ballot :
-            \/ LessThanAndIncompatible(b, m.prepared)
-            \/ b.counter < m.aCounter},
-        confirmedAborted |->
-            IF m.hCounter = 0 THEN {}
-            ELSE LET hbal == [counter |-> m.hCounter, value |-> m.ballot.value] IN
-                {b \in Ballot : LessThanAndIncompatible(b, hbal)},
-        voteToCommit |-> IF m.cCounter = 0 THEN {}
-            ELSE {b \in Ballot :
-                /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
-                /\ b.value = m.ballot.value},
-        acceptedCommitted |-> {}]
-    ELSE IF VariantTag(taggedMsg) = "COMMIT"
-    THEN LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN [
-        voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
-        acceptedAborted |->
-            LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
-            IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
-        confirmedAborted |->
-            LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
-            IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
-        voteToCommit |-> {b \in Ballot :
-            m.cCounter <= b.counter /\ b.value = m.ballot.value},
-        acceptedCommitted |-> {b \in Ballot :
-            /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
-            /\ b.value = m.ballot.value}]
-    ELSE [voteToAbort |-> {}, acceptedAborted |-> {}, confirmedAborted |-> {}, voteToCommit |-> {}, acceptedCommitted |-> {}]
-
 VARIABLES
     ballot \* ballot[n] is the current ballot being prepared or committed by node n
 ,   phase  \* phase[n] is the current phase of node n
@@ -139,10 +82,66 @@ ByzStep == \E msgs \in [byz -> SUBSET Message] :
     /\  sent' = [n \in N |-> IF n \notin byz THEN sent[n] ELSE msgs[n]]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
-(******************************************************************************)
-(* We start by specifying how a node updates its local state depending on the *)
-(* messages it receives.                                                      *)
-(******************************************************************************)
+
+(******************************************************)
+(* Now we specify what messages can be sent by a node *)
+(******************************************************)
+
+\* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
+\* TODO why is it usefull to have this constraint?
+SummarizePrepared(n) ==
+    IF prepared[n] \preceq ballot[n]
+    THEN [prepared |-> prepared[n], aCounter |-> aCounter[n]]
+    ELSE
+        IF ballot[n].value > prepared[n].value \/ aCounter[n] > ballot[n].counter
+        THEN [
+            prepared |-> [counter |-> ballot[n].counter, value |-> prepared[n].value],
+            aCounter |-> Min(aCounter[n], ballot[n].counter)]
+        ELSE 
+            IF aCounter[n] = ballot[n].counter
+            \* TODO okay?
+            THEN [
+                prepared |-> [counter |-> ballot[n].counter, value |-> ballot[n].value],
+                aCounter |-> aCounter[n]]
+            ELSE [
+                prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
+                aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
+
+SendPrepare(n) ==
+    /\  ballot[n].counter > 0
+    /\  phase[n] = "PREPARE"
+    /\  LET msg == Variant("PREPARE", [
+                ballot |-> ballot[n]
+            ,   prepared |-> SummarizePrepared(n).prepared
+            ,   aCounter |-> SummarizePrepared(n).aCounter
+            ,   hCounter |->
+                    IF h[n].counter > -1 /\ h[n].value = ballot[n].value
+                    THEN h[n].counter
+                    ELSE -1 \* TODO okay?
+            ,   cCounter |-> Max(c[n].counter, 0)])
+        IN 
+            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
+    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
+    
+SendCommit(n) ==
+    /\  phase[n] = "COMMIT"
+    /\  LET msg == Variant("COMMIT", [
+                ballot |-> ballot[n]
+            ,   preparedCounter |-> prepared[n].counter
+            ,   hCounter |-> h[n].counter
+            ,   cCounter |-> c[n].counter])
+        IN
+            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
+    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
+
+\* SendExternalize(n) ==
+\*     /\  phase[n] = "EXTERNALIZE"
+\*     /\  LET msg == Variant("EXTERNALIZE", [
+\*             commit |-> ballot[n]
+\*         ,   hCounter |-> h[n].counter])
+\*         IN
+\*             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
+\*     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
 (*******************************************************************************)
 (* At any point in time, we may increase the ballot counter and set the ballot *)
@@ -161,6 +160,11 @@ IncreaseBallotCounter(n, b) ==
     \*     THEN c' = [c EXCEPT ![n] = ballot'[n]]
     \*     ELSE UNCHANGED c
     /\ UNCHANGED <<phase, prepared, aCounter, h, c, sent, byz>>
+
+(**********************************************************************************)
+(* We now specify how a node updates its local state depending on the messages it *)
+(* receives.                                                                      *)
+(**********************************************************************************)
 
 \* @type: ($ballot, $message) => Bool;
 VotesToPrepare(b, taggedMsg) ==
@@ -294,66 +298,6 @@ AcceptCommitted(n, b) ==
         ELSE UNCHANGED <<prepared, aCounter>>
     /\  UNCHANGED <<ballot, sent, byz>>
 
-(******************************************************)
-(* Now we specify what messages can be sent by a node *)
-(******************************************************)
-
-\* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
-\* TODO why is it usefull to have this constraint?
-SummarizePrepared(n) ==
-    IF prepared[n] \preceq ballot[n]
-    THEN [prepared |-> prepared[n], aCounter |-> aCounter[n]]
-    ELSE
-        IF ballot[n].value > prepared[n].value \/ aCounter[n] > ballot[n].counter
-        THEN [
-            prepared |-> [counter |-> ballot[n].counter, value |-> prepared[n].value],
-            aCounter |-> Min(aCounter[n], ballot[n].counter)]
-        ELSE 
-            IF aCounter[n] = ballot[n].counter
-            \* TODO okay?
-            THEN [
-                prepared |-> [counter |-> ballot[n].counter, value |-> ballot[n].value],
-                aCounter |-> aCounter[n]]
-            ELSE [
-                prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
-                aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
-
-SendPrepare(n) ==
-    /\  ballot[n].counter > 0
-    /\  phase[n] = "PREPARE"
-    /\  LET msg == Variant("PREPARE", [
-                ballot |-> ballot[n]
-            ,   prepared |-> SummarizePrepared(n).prepared
-            ,   aCounter |-> SummarizePrepared(n).aCounter
-            ,   hCounter |->
-                    IF h[n].counter > -1 /\ h[n].value = ballot[n].value
-                    THEN h[n].counter
-                    ELSE -1 \* TODO okay?
-            ,   cCounter |-> Max(c[n].counter, 0)])
-        IN 
-            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
-    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
-    
-SendCommit(n) ==
-    /\  phase[n] = "COMMIT"
-    /\  LET msg == Variant("COMMIT", [
-                ballot |-> ballot[n]
-            ,   preparedCounter |-> prepared[n].counter
-            ,   hCounter |-> h[n].counter
-            ,   cCounter |-> c[n].counter])
-        IN
-            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
-    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
-
-\* SendExternalize(n) ==
-\*     /\  phase[n] = "EXTERNALIZE"
-\*     /\  LET msg == Variant("EXTERNALIZE", [
-\*             commit |-> ballot[n]
-\*         ,   hCounter |-> h[n].counter])
-\*         IN
-\*             sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
-\*     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
-
 (******************************************)
 (* We can now give the full specification *)
 (******************************************)
@@ -379,6 +323,27 @@ Spec ==
 (* We now turn to correctness properties *)
 (*****************************************)
 
+\* Some well-formedness conditions on messages:
+\* @type: $message => Bool;
+MessageInvariant(taggedMsg) ==
+    IF VariantTag(taggedMsg) = "PREPARE"
+    THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN
+        /\  m.ballot.counter > 0
+        /\  m.prepared.counter > -1 =>
+            /\  m.prepared \preceq m.ballot
+            /\  m.aCounter <= m.prepared.counter
+        /\  m.prepared.counter = -1 => m.aCounter = 0
+        /\  m.cCounter <= m.hCounter
+    ELSE IF VariantTag(taggedMsg) = "COMMIT"
+    THEN LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN
+        /\  m.cCounter > 0
+        /\  m.cCounter <= m.ballot.counter
+        /\  m.cCounter <= m.hCounter
+    ELSE TRUE
+\* TODO: Page 13 mentions that we should have m.hCounter <= m.ballot.counter in a PREPARE message
+\* This seems superfluous.
+\* I guess the sender should have increased its ballot counter before sending the message, but it's not a safety problem.
+
 Invariant ==
     /\  TypeOK
     /\  \A n \in N \ byz :
@@ -395,6 +360,42 @@ Invariant ==
                 /\  c[n].value = prepared[n].value
                 /\  c[n].value = ballot[n].value
 
+\* Meaning of the messages in terms of logical, federated-voting messages.
+\* We will use this to show that this specification refines the AbstractBalloting specification.
+\* @type: $message => {voteToAbort : Set($ballot), acceptedAborted : Set($ballot), confirmedAborted : Set($ballot), voteToCommit : Set($ballot), acceptedCommitted : Set($ballot)};
+LogicalMessages(taggedMsg) ==
+    IF VariantTag(taggedMsg) = "PREPARE"
+    THEN LET m == VariantGetUnsafe("PREPARE", taggedMsg) IN [
+        voteToAbort |-> {b \in Ballot :
+            LessThanAndIncompatible(b, m.ballot)},
+        acceptedAborted |-> {b \in Ballot :
+            \/ LessThanAndIncompatible(b, m.prepared)
+            \/ b.counter < m.aCounter},
+        confirmedAborted |->
+            IF m.hCounter = 0 THEN {}
+            ELSE LET hbal == [counter |-> m.hCounter, value |-> m.ballot.value] IN
+                {b \in Ballot : LessThanAndIncompatible(b, hbal)},
+        voteToCommit |-> IF m.cCounter = 0 THEN {}
+            ELSE {b \in Ballot :
+                /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
+                /\ b.value = m.ballot.value},
+        acceptedCommitted |-> {}]
+    ELSE IF VariantTag(taggedMsg) = "COMMIT"
+    THEN LET m == VariantGetUnsafe("COMMIT", taggedMsg) IN [
+        voteToAbort |-> {b \in Ballot : b.value # m.ballot.value},
+        acceptedAborted |->
+            LET maxPrepared == [counter |-> m.preparedCounter, value |-> m.ballot.value]
+            IN {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
+        confirmedAborted |->
+            LET maxPrepared == [counter |-> m.hCounter, value |-> m.ballot.value]
+            IN  {b \in Ballot : LessThanAndIncompatible(b, maxPrepared)},
+        voteToCommit |-> {b \in Ballot :
+            m.cCounter <= b.counter /\ b.value = m.ballot.value},
+        acceptedCommitted |-> {b \in Ballot :
+            /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
+            /\ b.value = m.ballot.value}]
+    ELSE [voteToAbort |-> {}, acceptedAborted |-> {}, confirmedAborted |-> {}, voteToCommit |-> {}, acceptedCommitted |-> {}]
+                    
 \* Next we instantiate the AbstractBalloting specification
 
 voteToAbort == [n \in N |-> UNION {LogicalMessages(m).voteToAbort : m \in sent[n]}]
