@@ -68,6 +68,7 @@ Init ==
 (*                                                                                 *)
 (* Note how this reasoning appears in the inductive invariant below.               *)
 (***********************************************************************************)
+
 IncreaseBallotCounter(n, c) ==
     /\  c > 0
     /\  c > ballot[n].counter
@@ -86,6 +87,9 @@ IncreaseBallotCounter(n, c) ==
 (* committed. That would simplify the agreement proof but complicate the liveness *)
 (* proof. In any case, it is an invariant that nothing less-and-incompatible is   *)
 (* accepted committed at this point (see AcceptNeverContradictory).               *)
+(*                                                                                *)
+(* TODO: Actually, we need to check that to ensure safety to intertwined but      *)
+(* befouled validators.                                                           *)
 (**********************************************************************************)
 AcceptPrepared(n, b) ==
     /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
@@ -100,17 +104,21 @@ ConfirmPrepared(n, b) ==
     /\  h' = [h EXCEPT ![n] = b]
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
 
-(*******************************************************************************)
-(* When a node votes to commit a ballot, it must check that it has not already *)
-(* voted or accepted to abort it. This is crucial to avoid externalizing two   *)
-(* different values in two different ballots. We also update h[n] if needed to *)
-(* reflect the new highest-confirmed prepared ballot.                          *)
-(*******************************************************************************)
+(**********************************************************************************)
+(* When a node votes to commit a ballot, it must check that it has not already    *)
+(* voted or accepted to abort it. This is crucial to avoid externalizing two      *)
+(* different values in two different ballots. We also update h[n] if needed to    *)
+(* reflect the new highest-confirmed prepared ballot.                             *)
+(*                                                                                *)
+(* Note that b.counter larger or equal to anything voted, accepted, or confirmed, *)
+(* but it is still possible that something incompatible with b is accepted or     *)
+(* confirmed with the same ballot counter.                                        *)
+(**********************************************************************************)
 VoteToCommit(n) == LET b == ballot[n] IN
     /\  b.counter > 0
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) =>
-            b2 \notin voteToPrepare[n] \cup acceptedPrepared[n]
-    /\  b \prec h[n] => b.value = h[n].value
+            b2 \notin acceptedPrepared[n]
+    /\  b \prec h[n] => b.value = h[n].value \* TODO in this case we should have bumped the counter to h[n].counter no?
     /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  IF h[n] \preceq b
