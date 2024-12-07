@@ -196,7 +196,6 @@ InductiveInvariant ==
     \* Finally, our goal:
     /\  Agreement
 
-\* An additional property implies by the inductive invariant:
 AcceptNeverContradictory == \A b1,b2 \in Ballot, n1,n2 \in N \ byz :
     /\  b1 \in acceptedCommitted[n1]
     /\  b2 \in acceptedPrepared[n2]

@@ -80,10 +80,67 @@ ByzStep == \E msgs \in [byz -> SUBSET Message] :
     /\  sent' = [n \in N |-> IF n \notin byz THEN sent[n] ELSE msgs[n]]
     /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
-(******************************************************************************)
-(* We start by specifying how a node updates its local state depending on the *)
-(* messages it receives.                                                      *)
-(******************************************************************************)
+(******************************************************)
+(* Now we specify what messages can be sent by a node *)
+(******************************************************)
+
+\* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
+SummarizePrepared(n) ==
+    IF prepared[n] \preceq ballot[n]
+    THEN [prepared |-> prepared[n], aCounter |-> aCounter[n]]
+    ELSE
+        IF ballot[n].value > prepared[n].value \/ aCounter[n] > ballot[n].counter
+        THEN [
+            prepared |-> [counter |-> ballot[n].counter, value |-> prepared[n].value],
+            aCounter |-> Min(aCounter[n], ballot[n].counter)]
+        ELSE 
+            IF aCounter[n] = ballot[n].counter
+            \* TODO okay?
+            THEN [
+                prepared |-> [counter |-> ballot[n].counter, value |-> ballot[n].value],
+                aCounter |-> aCounter[n]]
+            ELSE [
+                prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
+                aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
+
+SendPrepare(n) ==
+    /\  ballot[n].counter > 0
+    /\  phase[n] = "PREPARE"
+    /\  LET msg == [
+            type |-> "PREPARE"
+        ,   ballot |-> ballot[n]
+        ,   prepared |-> SummarizePrepared(n).prepared
+        ,   aCounter |-> SummarizePrepared(n).aCounter
+        ,   hCounter |->
+                IF h[n].counter > -1 /\ h[n].value = ballot[n].value
+                THEN h[n].counter
+                ELSE 0
+        ,   cCounter |-> Max(c[n].counter, 0)]
+        IN 
+            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
+    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
+    
+SendCommit(n) ==
+    /\  phase[n] = "COMMIT"
+    /\  LET msg == [
+            type |-> "COMMIT"
+        ,   ballot |-> ballot[n]
+        ,   preparedCounter |-> prepared[n].counter
+        ,   hCounter |-> h[n].counter
+        ,   cCounter |-> c[n].counter]
+        IN
+            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
+    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
+
+SendExternalize(n) ==
+    /\  phase[n] = "EXTERNALIZE"
+    /\  LET msg == [
+            type |-> "EXTERNALIZE"
+        ,   commit |-> ballot[n]
+        ,   hCounter |-> h[n].counter]
+        IN
+            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
+    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
 (*******************************************************************************)
 (* At any point in time, we may increase the ballot counter and set the ballot *)
@@ -97,11 +154,12 @@ IncreaseBallotCounter(n, b) ==
             ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> h[n].value]]
         ELSE
             \E v \in V : ballot' = [ballot EXCEPT ![n] = [counter |-> b, value |-> v]]
-    \* TODO: optimization
-    \* /\  IF b = 1
-    \*     THEN c' = [c EXCEPT ![n] = ballot'[n]]
-    \*     ELSE UNCHANGED c
     /\ UNCHANGED <<phase, prepared, aCounter, h, c, sent, byz>>
+
+(**********************************************************************************)
+(* We now specify how a node updates its local state depending on the messages it *)
+(* receives.                                                                      *)
+(**********************************************************************************)
 
 VotesToPrepare(b, m) ==
     \/  /\  m.type = "PREPARE"
@@ -209,7 +267,7 @@ AcceptCommitted(n, b) ==
     /\  IF phase[n] = "PREPARE"
         THEN phase' = [phase EXCEPT ![n] = "COMMIT"] /\ c' = [c EXCEPT ![n] = b]
         ELSE UNCHANGED <<phase, c>>
-    /\  phase[n] = "COMMIT" => h[n] \prec b
+    /\  phase[n] = "COMMIT" => h[n] \prec b \* TODO: why? Because we're updating h below? Then update conditionally...
     /\  \/ \E Q \in Quorum : \A m \in Q : \E msg \in sent[m] : VotesToCommit(b, msg)
         \/ \E B \in BlockingSet : \A m \in B : \E msg \in sent[m] : AcceptsCommitted(b, msg)
     /\  h' = [h EXCEPT ![n] = b]
@@ -217,68 +275,6 @@ AcceptCommitted(n, b) ==
         THEN UpdatePrepared(n, b)
         ELSE UNCHANGED <<prepared, aCounter>>
     /\  UNCHANGED <<ballot, sent, byz>>
-
-(******************************************************)
-(* Now we specify what messages can be sent by a node *)
-(******************************************************)
-
-\* Summarize what has been prepared, under the constraint that prepared is less than or equal to ballot:
-SummarizePrepared(n) ==
-    IF prepared[n] \preceq ballot[n]
-    THEN [prepared |-> prepared[n], aCounter |-> aCounter[n]]
-    ELSE
-        IF ballot[n].value > prepared[n].value \/ aCounter[n] > ballot[n].counter
-        THEN [
-            prepared |-> [counter |-> ballot[n].counter, value |-> prepared[n].value],
-            aCounter |-> Min(aCounter[n], ballot[n].counter)]
-        ELSE 
-            IF aCounter[n] = ballot[n].counter
-            \* TODO okay?
-            THEN [
-                prepared |-> [counter |-> ballot[n].counter, value |-> ballot[n].value],
-                aCounter |-> aCounter[n]]
-            ELSE [
-                prepared |-> [counter |-> ballot[n].counter-1, value |-> prepared[n].value],
-                aCounter |-> Min(aCounter[n], ballot[n].counter-1)]
-
-SendPrepare(n) ==
-    /\  ballot[n].counter > 0
-    /\  phase[n] = "PREPARE"
-    /\  LET msg == [
-            type |-> "PREPARE"
-        ,   ballot |-> ballot[n]
-        ,   prepared |-> SummarizePrepared(n).prepared
-        ,   aCounter |-> SummarizePrepared(n).aCounter
-        ,   hCounter |->
-                IF h[n].counter > -1 /\ h[n].value = ballot[n].value
-                THEN h[n].counter
-                ELSE 0
-        ,   cCounter |-> Max(c[n].counter, 0)]
-        IN 
-            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
-    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
-    
-SendCommit(n) ==
-    /\  phase[n] = "COMMIT"
-    /\  LET msg == [
-            type |-> "COMMIT"
-        ,   ballot |-> ballot[n]
-        ,   preparedCounter |-> prepared[n].counter
-        ,   hCounter |-> h[n].counter
-        ,   cCounter |-> c[n].counter]
-        IN
-            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
-    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
-
-SendExternalize(n) ==
-    /\  phase[n] = "EXTERNALIZE"
-    /\  LET msg == [
-            type |-> "EXTERNALIZE"
-        ,   commit |-> ballot[n]
-        ,   hCounter |-> h[n].counter]
-        IN
-            sent' = [sent EXCEPT ![n] = sent[n] \cup {msg}]
-    /\  UNCHANGED <<ballot, phase, prepared, aCounter, h, c, byz>>
 
 (******************************************)
 (* We can now give the full specification *)
@@ -338,8 +334,6 @@ Invariant ==
                 /\  c[n].value = prepared[n].value
                 /\  c[n].value = ballot[n].value
 
-\* Next we instantiate the AbstractBalloting specification
-
 (*****************************************************************************)
 (* Meaning of the messages in terms of logical, federated-voting messages on *)
 (* abort/commit statements. We will use this to show that this specification *)
@@ -375,6 +369,8 @@ LogicalMessages(m) ==
             acceptedCommitted |-> {b \in Ballot :
                 /\ m.cCounter <= b.counter /\ b.counter <= m.hCounter
                 /\ b.value = m.ballot.value}]
+
+\* Next we instantiate the AbstractBalloting specification
 
 voteToAbort == [n \in N |-> UNION {LogicalMessages(m).voteToAbort : m \in sent[n]}]
 acceptedAborted == [n \in N |-> UNION {LogicalMessages(m).acceptedAborted : m \in sent[n]}]
