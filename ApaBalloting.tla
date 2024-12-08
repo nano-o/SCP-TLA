@@ -5,7 +5,7 @@ N == {"N1_OF_NODE", "N2_OF_NODE", "N3_OF_NODE"}
 FailProneSet == {{"N1_OF_NODE"}, {"N3_OF_NODE"}}
 \* FailProneSet == {{}}
 Quorum  == {{"N1_OF_NODE", "N2_OF_NODE"}, {"N2_OF_NODE", "N3_OF_NODE"}}
-BallotNumber == {0,1}
+BallotNumber == {0,1,2}
 
 INSTANCE DomainModel
 
@@ -22,8 +22,10 @@ VARIABLES
     h
 ,   \* @type: NODE -> $ballot;
     c
-,   \* @type: NODE -> Set($message);
-    sent
+,   \* @type: NODE -> Set($prepareMessage);
+    sentPrepare
+,   \* @type: NODE -> Set($commitMessage);
+    sentCommit
 ,   \* @type: Set(NODE);
     byz
 

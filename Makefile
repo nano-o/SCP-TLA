@@ -25,8 +25,8 @@ $(STANDARD_MODULES)/Variants.tla:
 	jar -xf $(APA)/lib/apalache.jar tla2sany/StandardModules/
 
 test: $(APA)
-	APA=$(APA) ./check.sh -inductive TypeOK Balloting
-	APA=$(APA) ./check.sh -relative TypeOK ABNext Balloting
+	APA=$(APA) ./check.sh -inductive Inv1 Balloting
+	APA=$(APA) ./check.sh -relative Inv2_pre Inv2 Balloting
 	# $(APA)/bin/apalache-mc typecheck ApaBalloting.tla
 
 abstractballoting-safety: $(APA)
