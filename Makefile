@@ -4,9 +4,9 @@ APA=apalache-${APA_VERSION}
 APA_ARCHIVE=$(APA).tgz
 TLA_TOOLS_JAR=tla2tools.jar
 TLA_TOOLS_JAR_URL=https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-TLC_WORKERS=4
-TLC_OFFHEAP_MEMORY=35G
-TLC_HEAP=15G
+TLC_WORKERS=16
+TLC_OFFHEAP_MEMORY=30G
+TLC_HEAP=10G
 
 all:
 
@@ -39,6 +39,8 @@ abwp-apa: $(APA)
 	APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBallotingWithPrepare
 
 test: $(APA)
-	APA=$(APA) ./check.sh -implication InductiveInvariant LivenessInv1 AbstractBallotingWithPrepare
+	# APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBallotingWithPrepare
+	# APA=$(APA) ./check.sh -relative Inv_pre Inv AbstractBallotingWithPrepare
+	# APA=$(APA) ./check.sh -implication InductiveInvariant LivenessInv1 AbstractBallotingWithPrepare
 
 .PHONY: abstract-scp-safety balloting-refinement typeset all
