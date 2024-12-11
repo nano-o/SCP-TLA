@@ -2,7 +2,7 @@
 
 (**************************************************************************************)
 (* This is a specification of SCP's balloting protocol. We work at a high level of    *)
-(* abstraction where we do not explicitely model messages. Instead, we track what     *)
+(* abstraction where we do not explicitly model messages. Instead, we track what      *)
 (* statements are voted/accepted prepared and committed by each node. What we do      *)
 (* model explicitely is how each node n votes and accepts statements based on its     *)
 (* current ballot ballot[n] and its highest confirmed-prepared ballot h[n].           *)
@@ -19,7 +19,13 @@
 (*                                                                                    *)
 (* An informal specification of SCP can be found at:                                  *)
 (* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
+(*                                                                                    *)
+(* Next step would be to model how nodes summarize what they have accepted            *)
+(* prepared. Can we also model the fact that nodes only keep the latest message of    *)
+(* each other node? Maybe this could be done by non-deterministically erasing past    *)
+(* statements.                                                                        *)
 (**************************************************************************************)
+
 EXTENDS DomainModel
 
 VARIABLES
@@ -31,6 +37,7 @@ VARIABLES
 ,   acceptedCommitted
 ,   externalized
 ,   byz \* the set of malicious nodes
+,   syncBal \* a synchronous ballot
 
 TypeOK ==
     /\  ballot \in [N -> BallotOrNull]
@@ -41,6 +48,7 @@ TypeOK ==
     /\  acceptedCommitted \in [N -> SUBSET Ballot]
     /\  externalized \in [N -> SUBSET Ballot]
     /\  byz \in SUBSET N
+    /\  syncBal \in BallotNumber
 
 Init ==
     /\ ballot = [n \in N |-> nullBallot] \* current ballot of each node
@@ -51,6 +59,15 @@ Init ==
     /\ acceptedCommitted = [n \in N |-> {}]
     /\ externalized = [n \in N |-> {}]
     /\ byz \in FailProneSet \* byz is initially set to an arbitrary fail-prone set
+    /\ syncBal \in BallotNumber
+
+ByzantineHavoc ==
+    /\  \E n \in byz :
+        /\  \E newVoteToPrepare \in SUBSET Ballot : voteToPrepare' = [voteToPrepare EXCEPT ![n] = newVoteToPrepare]
+        /\  \E newAcceptedPrepared \in SUBSET Ballot : acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = newAcceptedPrepared]
+        /\  \E newVoteToCommit \in SUBSET Ballot : voteToCommit' = [voteToCommit EXCEPT ![n] = newVoteToCommit]
+        /\  \E newAcceptedCommitted \in SUBSET Ballot : acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = newAcceptedCommitted]
+    /\  UNCHANGED <<ballot, h, externalized, byz, syncBal>>
 
 (***********************************************************************************)
 (* Node n enters a new ballot and votes to prepare it. Note that n votes to        *)
@@ -77,32 +94,25 @@ IncreaseBallotCounter(n, c) ==
         THEN ballot' = [ballot EXCEPT ![n] = bal(c, h[n].value)]
         ELSE \E v \in V : ballot' = [ballot EXCEPT ![n] = bal(c, v)]
     /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = @ \cup {ballot[n]'}]
-    /\  UNCHANGED <<h, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
+    /\  UNCHANGED <<h, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
-(**********************************************************************************)
-(* Next we describe when a node accepts and confirms ballots prepared. Nothing    *)
-(* surprising here.                                                               *)
-(*                                                                                *)
-(* Note that we could check that nothing less-and-incompatible is accepted        *)
-(* committed. That would simplify the agreement proof but complicate the liveness *)
-(* proof. In any case, it is an invariant that nothing less-and-incompatible is   *)
-(* accepted committed at this point (see AcceptNeverContradictory).               *)
-(*                                                                                *)
-(* TODO: Actually, we need to check that to ensure safety to intertwined but      *)
-(* befouled validators.                                                           *)
-(**********************************************************************************)
+(***********************************************************************)
+(* Next we describe when a node accepts and confirms ballots prepared. *)
+(***********************************************************************)
 AcceptPrepared(n, b) ==
-    /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
-        \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedPrepared[n2]
+    /\  \/ \E Q \in Quorum : \A n2 \in Q : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
+        \/ \E Bl \in BlockingSet : \A n2 \in Bl : b \in acceptedPrepared[n2]
+    \* For safety of intertwined but befouled validators (see LivenessInv1 for why this does not hurt liveness):
+    /\  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) => b2 \notin acceptedCommitted[n]
     /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = @ \cup {b}]
-    /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz>>
+    /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
 ConfirmPrepared(n, b) ==
     /\  b.counter > -1
     /\  h[n] \prec b
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
+    /\  \E Q \in Quorum : \A n2 \in Q : b \in acceptedPrepared[n2]
     /\  h' = [h EXCEPT ![n] = b]
-    /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
+    /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
 (**********************************************************************************)
 (* When a node votes to commit a ballot, it must check that it has not already    *)
@@ -119,12 +129,12 @@ VoteToCommit(n) == LET b == ballot[n] IN
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) =>
             b2 \notin acceptedPrepared[n]
     /\  b \prec h[n] => b.value = h[n].value \* TODO in this case we should have bumped the counter to h[n].counter no?
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
+    /\  \E Q \in Quorum : \A n2 \in Q : b \in acceptedPrepared[n2]
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  IF h[n] \preceq b
         THEN h' = [h EXCEPT ![n] = b]
         ELSE UNCHANGED h
-    /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz>>
+    /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz, syncBal>>
 
 (********************************************************************************)
 (* Next we describe when a node accepts and confirms ballots committed. Nothing *)
@@ -132,30 +142,35 @@ VoteToCommit(n) == LET b == ballot[n] IN
 (********************************************************************************)
 
 AcceptCommitted(n) == LET b == ballot[n] IN
-    /\  \/  \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToCommit[n2]
-        \/  \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedCommitted[n2]
+    /\  \/  \E Q \in Quorum : \A n2 \in Q : b \in voteToCommit[n2]
+        \/  \E Bl \in BlockingSet : \A n2 \in Bl : b \in acceptedCommitted[n2]
+    \* next two lines to ensure safety to intertwined but befouled validators:
+    /\  b \in acceptedPrepared[n]
+    /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) => b2 \notin acceptedPrepared[n]
     /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup {b}]
-    /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, externalized, byz>>
+    /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, externalized, byz, syncBal>>
 
 Externalize(n) == LET b == ballot[n] IN
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedCommitted[n2]
+    /\  \E Q \in Quorum : \A n2 \in Q : b \in acceptedCommitted[n2]
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
-    /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz>>
+    /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz, syncBal>>
 
 (***************************************)
 (* Finally we put everything together: *)
 (***************************************)
-Next == \E n \in N \ byz :
-    \/  VoteToCommit(n)
-    \/  AcceptCommitted(n)
-    \/  Externalize(n)
-    \/  \E c \in BallotNumber, v \in V :
-        LET b == bal(c, v) IN
-            \/  IncreaseBallotCounter(n, c)
-            \/  AcceptPrepared(n, b)
-            \/  ConfirmPrepared(n, b)
+Next ==
+    \/ ByzantineHavoc
+    \/ \E n \in N \ byz :
+        \/  VoteToCommit(n)
+        \/  AcceptCommitted(n)
+        \/  Externalize(n)
+        \/  \E c \in BallotNumber, v \in V :
+            LET b == bal(c, v) IN
+                \/  IncreaseBallotCounter(n, c)
+                \/  AcceptPrepared(n, b)
+                \/  ConfirmPrepared(n, b)
 
-vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz>>
+vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
 Spec == Init /\ [][Next]_vars
 
@@ -196,9 +211,13 @@ InductiveInvariant ==
     \* Finally, our goal:
     /\  Agreement
 
-AcceptNeverContradictory == \A b1,b2 \in Ballot, n1,n2 \in N \ byz :
+(***********************************************************************)
+(* LivenessInv1 shows that AcceptPrepared is never blocked by a lower, *)
+(* incompatible ballot that is accepted committed.                     *)
+(***********************************************************************)
+LivenessInv1 == \A b1,b2 \in Ballot, n1 \in N \ byz :
     /\  b1 \in acceptedCommitted[n1]
-    /\  b2 \in acceptedPrepared[n2]
+    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in voteToPrepare[n2]
     /\  b1 \prec b2
     =>  b1.value = b2.value
 

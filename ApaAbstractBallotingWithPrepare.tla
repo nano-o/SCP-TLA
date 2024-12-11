@@ -24,7 +24,9 @@ VARIABLES
     \* @type: NODE -> Set($ballot);
     externalized,
     \* @type: Set(NODE);
-    byz
+    byz,
+    \* @type: Int;
+    syncBal
 
 INSTANCE AbstractBallotingWithPrepare
 
