@@ -59,8 +59,8 @@ Init ==
     /\ acceptedCommitted = [n \in N |-> {}]
     /\ externalized = [n \in N |-> {}]
     /\ byz \in FailProneSet \* byz is initially set to an arbitrary fail-prone set
-    \* /\ syncBal \in BallotNumber
-    /\ syncBal = 0
+    /\ syncBal \in BallotNumber
+    \* /\ syncBal = 0
 
 ByzantineHavoc ==
     /\  \E n \in byz :
@@ -89,6 +89,7 @@ ByzantineHavoc ==
 
 IncreaseBallotCounter(n, c) ==
     /\  c > 0
+    /\  syncBal # 0 => c <= syncBal
     /\  c > ballot[n].counter
     /\  h[n].counter <= c
     /\  IF h[n] # nullBallot
@@ -177,9 +178,30 @@ vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedComm
 
 Spec == Init /\ [][Next]_vars
 
+LiveSpec ==
+    /\  Init
+    /\  [][Next]_vars
+    /\  \A n \in N : n \notin byz =>
+        /\  WF_vars( VoteToCommit(n) )
+        /\  WF_vars( AcceptCommitted(n) )
+        /\  WF_vars( Externalize(n) )
+        /\  \A c \in BallotNumber :
+            /\  WF_vars( IncreaseBallotCounter(n, c) )
+            /\  \A v \in V : LET b == bal(c, v) IN
+                /\  WF_vars( AcceptPrepared(n, b) )
+                /\  WF_vars( ConfirmPrepared(n, b) )
+
 Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
+
+Liveness1 == syncBal # 0 => [](
+    (\E n \in N : n \notin byz /\ h[n].counter > 0)
+        => \E b \in Ballot : b.counter > 0 /\
+                <>( \A n \in N : n \notin byz => h[n] = b ))
+
+Liveness2 ==
+    \A n \in N : syncBal # 0 /\ n \notin byz => <>(externalized[n] # {})
 
 (**********************************************************)
 (* Here is an inductive invariant that implies agreement: *)
@@ -271,8 +293,8 @@ Inv_pre ==
 (* incompatible ballot that is accepted committed.                     *)
 (***********************************************************************)
 LivenessInv1 == \A b1,b2 \in Ballot, n1 \in N \ byz :
-    /\  b1 \in acceptedCommitted[n1]
     /\  \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in voteToPrepare[n2]
+    /\  b1 \in acceptedCommitted[n1]
     /\  b1 \prec b2
     =>  b1.value = b2.value
 
