@@ -144,6 +144,19 @@ Externalize(n, S) == LET b == ballot[n] IN
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz, syncBal>>
 
+DropMessage(n, b) ==
+    /\  \/  /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = voteToPrepare[n] \ {b}]
+            /\  UNCHANGED <<acceptedPrepared, voteToCommit, acceptedCommitted>>
+        \* never drop the latest message:
+        \/  /\  \neg b = MaxBal({b2 \in Ballot : b2 \in acceptedPrepared[n]})
+            /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = acceptedPrepared[n] \ {b}]
+            /\  UNCHANGED <<voteToPrepare, voteToCommit, acceptedCommitted>>
+        \/  /\  voteToCommit' = [voteToCommit EXCEPT ![n] = voteToCommit[n] \ {b}]
+            /\  UNCHANGED <<voteToPrepare, acceptedPrepared, acceptedCommitted>>
+        \/  /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = acceptedCommitted[n] \ {b}]
+            /\  UNCHANGED <<voteToPrepare, acceptedPrepared, voteToCommit>>
+    /\  UNCHANGED <<ballot, h, externalized, byz, syncBal>>
+
 (***************************************)
 (* Finally we put everything together: *)
 (***************************************)
@@ -155,6 +168,7 @@ Next ==
         \/  Externalize(n, S)
         \/  \E c \in BallotNumber, v \in V :
             LET b == bal(c, v) IN
+                \/  DropMessage(n, b)
                 \/  IncreaseBallotCounter(n, c)
                 \/  AcceptPrepared(n, b, S)
                 \/  ConfirmPrepared(n, b, S)
@@ -163,6 +177,10 @@ vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedComm
 
 Spec == Init /\ [][Next]_vars
 
+(***********************************************************************************)
+(* The following blows up TLC because of the quantification over S, so we state it *)
+(* in terms of concrete sets in the model-checking configuration spec.             *)
+(***********************************************************************************)
 LiveSpec ==
     /\  Init
     /\  [][Next]_vars

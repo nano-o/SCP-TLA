@@ -187,7 +187,8 @@ Aborted(b, a, p) ==
 
 \* update prepared and aCounter given a new accepted-prepared ballot
 UpdatePrepared(n, b) ==
-    \* TODO: what's commented out might be needed for liveness:
+    \* TODO: what's commented out might be needed for liveness
+    \* But, we only care that the highest confirmed prepared converges
     \* IF prepared[n] \prec b
     \* THEN
         /\  prepared' = [prepared EXCEPT ![n] = b]

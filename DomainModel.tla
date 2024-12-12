@@ -39,4 +39,7 @@ b1 \preceq b2 == LessThanOrEqual(b1, b2)
 LessThanAndIncompatible(b1, b2) ==
     b1 \prec b2 /\ b1.value # b2.value
 
+MaxBal(bs) == IF bs = {} THEN CHOOSE b \in Ballot : TRUE ELSE
+    CHOOSE b \in bs : \A b2 \in bs : b2 \preceq b
+
 ==========================================
