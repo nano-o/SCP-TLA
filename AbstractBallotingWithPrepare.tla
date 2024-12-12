@@ -62,14 +62,6 @@ Init ==
     /\ syncBal \in BallotNumber
     \* /\ syncBal = 0
 
-ByzantineHavoc ==
-    /\  \E n \in byz :
-        /\  \E newVoteToPrepare \in SUBSET Ballot : voteToPrepare' = [voteToPrepare EXCEPT ![n] = newVoteToPrepare]
-        /\  \E newAcceptedPrepared \in SUBSET Ballot : acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = newAcceptedPrepared]
-        /\  \E newVoteToCommit \in SUBSET Ballot : voteToCommit' = [voteToCommit EXCEPT ![n] = newVoteToCommit]
-        /\  \E newAcceptedCommitted \in SUBSET Ballot : acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = newAcceptedCommitted]
-    /\  UNCHANGED <<ballot, h, externalized, byz, syncBal>>
-
 (***********************************************************************************)
 (* Node n enters a new ballot and votes to prepare it. Note that n votes to        *)
 (* prepare its new ballot ballot'[n] regardless of whether it has previously voted *)
@@ -101,21 +93,18 @@ IncreaseBallotCounter(n, c) ==
 (***********************************************************************)
 (* Next we describe when a node accepts and confirms ballots prepared. *)
 (***********************************************************************)
-AcceptPrepared(n, b) ==
-    \* /\  \/ \E Q \in Quorum : \A n2 \in Q : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
-    \*     \/ \E Bl \in BlockingSet : \A n2 \in Bl : b \in acceptedPrepared[n2]
-    /\  \/ \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
-        \/ \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedPrepared[n2]
+AcceptPrepared(n, b, S) ==
+    /\  \/ S \in Quorum /\ \A n2 \in S \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
+        \/ S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
     \* For safety of intertwined but befouled validators (see LivenessInv1 for why this does not hurt liveness):
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) => b2 \notin acceptedCommitted[n]
     /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
-ConfirmPrepared(n, b) ==
+ConfirmPrepared(n, b, S) ==
     /\  b.counter > -1
     /\  h[n] \prec b
-    \* /\  \E Q \in Quorum : \A n2 \in Q : b \in acceptedPrepared[n2]
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
+    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
     /\  h' = [h EXCEPT ![n] = b]
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
@@ -129,11 +118,10 @@ ConfirmPrepared(n, b) ==
 (* but it is still possible that something incompatible with b is accepted or     *)
 (* confirmed with the same ballot counter.                                        *)
 (**********************************************************************************)
-VoteToCommit(n) == LET b == ballot[n] IN
+VoteToCommit(n, S) == LET b == ballot[n] IN
     /\  b.counter > 0
     /\  b \preceq h[n] /\ b.value = h[n].value \* must have confirmed prepared
-    \* /\  \E Q \in Quorum : \A n2 \in Q : b \in acceptedPrepared[n2]
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedPrepared[n2]
+    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz, syncBal>>
 
@@ -142,20 +130,17 @@ VoteToCommit(n) == LET b == ballot[n] IN
 (* surprising here.                                                             *)
 (********************************************************************************)
 
-AcceptCommitted(n) == LET b == ballot[n] IN
-    \* /\  \/  \E Q \in Quorum : \A n2 \in Q : b \in voteToCommit[n2]
-    \*     \/  \E Bl \in BlockingSet : \A n2 \in Bl : b \in acceptedCommitted[n2]
-    /\  \/  \E Q \in Quorum : \A n2 \in Q \ byz : b \in voteToCommit[n2]
-        \/  \E Bl \in BlockingSet : \A n2 \in Bl \ byz : b \in acceptedCommitted[n2]
+AcceptCommitted(n, S) == LET b == ballot[n] IN
+    /\  \/  S \in Quorum /\ \A n2 \in S \ byz : b \in voteToCommit[n2]
+        \/  S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedCommitted[n2]
     \* next two lines to ensure safety to intertwined but befouled validators:
     /\  b \in acceptedPrepared[n]
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) => b2 \notin acceptedPrepared[n]
     /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, externalized, byz, syncBal>>
 
-Externalize(n) == LET b == ballot[n] IN
-    \* /\  \E Q \in Quorum : \A n2 \in Q : b \in acceptedCommitted[n2]
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b \in acceptedCommitted[n2]
+Externalize(n, S) == LET b == ballot[n] IN
+    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedCommitted[n2]
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz, syncBal>>
 
@@ -164,15 +149,15 @@ Externalize(n) == LET b == ballot[n] IN
 (***************************************)
 Next ==
     \* \/ ByzantineHavoc
-    \/ \E n \in N \ byz :
-        \/  VoteToCommit(n)
-        \/  AcceptCommitted(n)
-        \/  Externalize(n)
+    \/ \E n \in N \ byz, S \in SUBSET N :
+        \/  VoteToCommit(n, S)
+        \/  AcceptCommitted(n, S)
+        \/  Externalize(n, S)
         \/  \E c \in BallotNumber, v \in V :
             LET b == bal(c, v) IN
                 \/  IncreaseBallotCounter(n, c)
-                \/  AcceptPrepared(n, b)
-                \/  ConfirmPrepared(n, b)
+                \/  AcceptPrepared(n, b, S)
+                \/  ConfirmPrepared(n, b, S)
 
 vars == <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
@@ -181,15 +166,16 @@ Spec == Init /\ [][Next]_vars
 LiveSpec ==
     /\  Init
     /\  [][Next]_vars
-    /\  \A n \in N : n \notin byz =>
-        /\  WF_vars( VoteToCommit(n) )
-        /\  WF_vars( AcceptCommitted(n) )
-        /\  WF_vars( Externalize(n) )
+    \* this seems to blow up very bad because of the quantified set S:
+    /\  \A n \in N : n \notin byz => \A S \in SUBSET N : S \cap byz = {} /\ S # {} =>
+        \* /\  WF_vars( VoteToCommit(n, S) )
+        \* /\  WF_vars( AcceptCommitted(n, S) )
+        \* /\  WF_vars( Externalize(n, S) )
         /\  \A c \in BallotNumber :
             /\  WF_vars( IncreaseBallotCounter(n, c) )
             /\  \A v \in V : LET b == bal(c, v) IN
-                /\  WF_vars( AcceptPrepared(n, b) )
-                /\  WF_vars( ConfirmPrepared(n, b) )
+                /\  WF_vars( AcceptPrepared(n, b, S) )
+                /\  WF_vars( ConfirmPrepared(n, b, S) )
 
 Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
