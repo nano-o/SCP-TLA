@@ -1,4 +1,4 @@
-APA_VERSION=0.47.0
+APA_VERSION=0.47.2
 APA_RELEASE_URL=https://github.com/apalache-mc/apalache/releases/download/v${APA_VERSION}/apalache-${APA_VERSION}.tgz
 APA=apalache-${APA_VERSION}
 APA_ARCHIVE=$(APA).tgz

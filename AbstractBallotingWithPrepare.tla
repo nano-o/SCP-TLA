@@ -121,7 +121,7 @@ ConfirmPrepared(n, b, S) ==
 VoteToCommit(n, S) == LET b == ballot[n] IN
     /\  b.counter > 0
     /\  b \preceq h[n] /\ b.value = h[n].value \* must have confirmed prepared
-    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
+    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2] \* TODO isn't this redundant?
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz, syncBal>>
 
@@ -134,7 +134,7 @@ AcceptCommitted(n, S) == LET b == ballot[n] IN
     /\  \/  S \in Quorum /\ \A n2 \in S \ byz : b \in voteToCommit[n2]
         \/  S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedCommitted[n2]
     \* next two lines to ensure safety to intertwined but befouled validators:
-    /\  b \in acceptedPrepared[n]
+    /\  b \in acceptedPrepared[n] \* TODO: shouldn't this be confirmed prepared?
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) => b2 \notin acceptedPrepared[n]
     /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, externalized, byz, syncBal>>
@@ -168,7 +168,7 @@ Next ==
         \/  Externalize(n, S)
         \/  \E c \in BallotNumber, v \in V :
             LET b == bal(c, v) IN
-                \/  DropMessage(n, b)
+                \* \/  DropMessage(n, b)
                 \/  IncreaseBallotCounter(n, c)
                 \/  AcceptPrepared(n, b, S)
                 \/  ConfirmPrepared(n, b, S)
@@ -186,9 +186,9 @@ LiveSpec ==
     /\  [][Next]_vars
     \* this seems to blow up very bad because of the quantified set S:
     /\  \A n \in N : n \notin byz => \A S \in SUBSET N : S \cap byz = {} /\ S # {} =>
-        \* /\  WF_vars( VoteToCommit(n, S) )
-        \* /\  WF_vars( AcceptCommitted(n, S) )
-        \* /\  WF_vars( Externalize(n, S) )
+        /\  WF_vars( VoteToCommit(n, S) )
+        /\  WF_vars( AcceptCommitted(n, S) )
+        /\  WF_vars( Externalize(n, S) )
         /\  \A c \in BallotNumber :
             /\  WF_vars( IncreaseBallotCounter(n, c) )
             /\  \A v \in V : LET b == bal(c, v) IN
@@ -207,9 +207,10 @@ Liveness1 == syncBal # 0 => [](
 Liveness2 ==
     \A n \in N : syncBal # 0 /\ n \notin byz => <>(externalized[n] # {})
 
-(**********************************************************)
-(* Here is an inductive invariant that implies agreement: *)
-(**********************************************************)
+(**************************************************************************************)
+(* Inductive invariant that implies agreement. TODO: there is a much simpler one.     *)
+(* The "crux" property is useful but for liveness.                                    *)
+(**************************************************************************************)
 InductiveInvariant ==
     \* First, the boring stuff:
     /\  TypeOK
