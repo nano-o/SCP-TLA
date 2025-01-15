@@ -108,16 +108,16 @@ ConfirmPrepared(n, b, S) ==
     /\  h' = [h EXCEPT ![n] = b]
     /\  UNCHANGED <<ballot, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
 
-(**********************************************************************************)
-(* When a node votes to commit a ballot, it must check that it has not already    *)
-(* voted or accepted to abort it. This is crucial to avoid externalizing two      *)
-(* different values in two different ballots. We also update h[n] if needed to    *)
-(* reflect the new highest-confirmed prepared ballot.                             *)
-(*                                                                                *)
-(* Note that b.counter larger or equal to anything voted, accepted, or confirmed, *)
-(* but it is still possible that something incompatible with b is accepted or     *)
-(* confirmed with the same ballot counter.                                        *)
-(**********************************************************************************)
+(**************************************************************************************)
+(* When a node votes to commit a ballot, it must make sure it has confirmed it        *)
+(* prepared. This is crucial to avoid externalizing two different values in two       *)
+(* different ballots. We also update h[n] if needed to reflect the new                *)
+(* highest-confirmed prepared ballot.                                                 *)
+(*                                                                                    *)
+(* Note that b.counter is always larger or equal to the counter of any ballot         *)
+(* voted, accepted, or confirmed, but it is still possible that something             *)
+(* incompatible with b is accepted or confirmed with the same ballot counter.         *)
+(**************************************************************************************)
 VoteToCommit(n, S) == LET b == ballot[n] IN
     /\  b.counter > 0
     /\  b \preceq h[n] /\ b.value = h[n].value \* must have confirmed prepared
