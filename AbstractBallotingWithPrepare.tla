@@ -111,8 +111,7 @@ ConfirmPrepared(n, b, S) ==
 (**************************************************************************************)
 (* When a node votes to commit a ballot, it must make sure it has confirmed it        *)
 (* prepared. This is crucial to avoid externalizing two different values in two       *)
-(* different ballots. We also update h[n] if needed to reflect the new                *)
-(* highest-confirmed prepared ballot.                                                 *)
+(* different ballots.                                                                 *)
 (*                                                                                    *)
 (* Note that b.counter is always larger or equal to the counter of any ballot         *)
 (* voted, accepted, or confirmed, but it is still possible that something             *)
@@ -121,7 +120,7 @@ ConfirmPrepared(n, b, S) ==
 VoteToCommit(n, S) == LET b == ballot[n] IN
     /\  b.counter > 0
     /\  b \preceq h[n] /\ b.value = h[n].value \* must have confirmed prepared
-    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2] \* TODO isn't this redundant?
+    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2] \* TODO should be redundant, but fails without it.
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz, syncBal>>
 
