@@ -20,10 +20,9 @@
 (* An informal specification of SCP can be found at:                                  *)
 (* `^https://datatracker.ietf.org/doc/html/draft-mazieres-dinrg-scp-05\#section-3.5^' *)
 (*                                                                                    *)
-(* Next step would be to model how nodes summarize what they have accepted            *)
-(* prepared. Can we also model the fact that nodes only keep the latest message of    *)
-(* each other node? Maybe this could be done by non-deterministically erasing past    *)
-(* statements.                                                                        *)
+(* Finally, note that proving agreement is not very hard, but liveness relies on a    *)
+(* trickier invariant (we prove that invariant, but not the full liveness             *)
+(* property).                                                                         *)
 (**************************************************************************************)
 
 EXTENDS DomainModel
