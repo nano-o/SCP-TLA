@@ -26,6 +26,7 @@
 (* statements.                                                                        *)
 (**************************************************************************************)
 
+
 EXTENDS DomainModel
 
 VARIABLES
@@ -60,7 +61,6 @@ Init ==
     /\ externalized = [n \in N |-> {}]
     /\ byz \in FailProneSet \* byz is initially set to an arbitrary fail-prone set
     /\ syncBal \in BallotNumber
-    \* /\ syncBal = 0
 
 (***********************************************************************************)
 (* Node n enters a new ballot and votes to prepare it. Note that n votes to        *)
@@ -94,6 +94,7 @@ IncreaseBallotCounter(n, c) ==
 (* Next we describe when a node accepts and confirms ballots prepared. *)
 (***********************************************************************)
 AcceptPrepared(n, b, S) ==
+    \* /\  \A b2 \in Ballot : b \prec b2 => \neg (b2 \in acceptedPrepared[n]) \* TODO what is this?
     /\  \/ S \in Quorum /\ \A n2 \in S \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
         \/ S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
     \* For safety of intertwined but befouled validators (see LivenessInv1 for why this does not hurt liveness):
@@ -120,7 +121,6 @@ ConfirmPrepared(n, b, S) ==
 VoteToCommit(n, S) == LET b == ballot[n] IN
     /\  b.counter > 0
     /\  b \preceq h[n] /\ b.value = h[n].value \* must have confirmed prepared
-    /\  S \in Quorum /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2] \* TODO should be redundant, but fails without it.
     /\  voteToCommit' = [voteToCommit EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, acceptedCommitted, externalized, byz, syncBal>>
 
@@ -143,10 +143,10 @@ Externalize(n, S) == LET b == ballot[n] IN
     /\  externalized' = [externalized EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, acceptedCommitted, byz, syncBal>>
 
-DropMessage(n, b) ==
-    /\  \/  /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = voteToPrepare[n] \ {b}]
+DropMessage(n, b) == \* TODO for use in liveness checking
+    /\  \/  /\  \neg b = MaxBal({b2 \in Ballot : b2 \in voteToPrepare[n]})
+            /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = voteToPrepare[n] \ {b}]
             /\  UNCHANGED <<acceptedPrepared, voteToCommit, acceptedCommitted>>
-        \* never drop the latest message:
         \/  /\  \neg b = MaxBal({b2 \in Ballot : b2 \in acceptedPrepared[n]})
             /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = acceptedPrepared[n] \ {b}]
             /\  UNCHANGED <<voteToPrepare, voteToCommit, acceptedCommitted>>
@@ -194,6 +194,11 @@ LiveSpec ==
                 /\  WF_vars( AcceptPrepared(n, b, S) )
                 /\  WF_vars( ConfirmPrepared(n, b, S) )
 
+(**********************************************************************************)
+(* TODO: to find an exec in which dropping accept-prepare breaks liveness we need *)
+(* to disable re-accepting prepared                                               *)
+(**********************************************************************************)
+
 Agreement ==
     \A n1,n2 \in N \ byz : \A b1,b2 \in Ballot :
         b1 \in externalized[n1] /\ b2 \in externalized[n2] => b1.value = b2.value
@@ -210,6 +215,16 @@ Liveness2 ==
 (* Inductive invariant that implies agreement. TODO: there is a much simpler one.     *)
 (* The "crux" property is useful but for liveness.                                    *)
 (**************************************************************************************)
+
+ConfirmedPrepared(b) ==
+    \E Q \in Quorum : \A n \in Q \ byz : b \in acceptedPrepared[n]
+AcceptedPrepared(b) ==
+    \E Q \in Quorum : \A n \in Q \ byz : b \in voteToPrepare[n]
+ConfirmedCommitted(b) ==
+    \E Q \in Quorum : \A n \in Q \ byz : b \in acceptedCommitted[n]
+AcceptedCommitted(b) ==
+    \E Q \in Quorum : \A n \in Q \ byz : b \in voteToCommit[n]
+
 InductiveInvariant ==
     \* First, the boring stuff:
     /\  TypeOK
@@ -217,21 +232,24 @@ InductiveInvariant ==
     /\  \A n \in N \ byz, c1,c2 \in BallotNumber, v1,v2 \in V :
         LET b1 == bal(c1,v1) b2 == bal(c2,v2) IN
         /\  ballot[n].counter > -1 => ballot[n].counter > 0
-        /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] => b1.counter > 0 /\ b1.counter <= ballot[n].counter
-        /\  b1 \in acceptedPrepared[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToPrepare[n2]
-        /\  b1 \in acceptedCommitted[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToCommit[n2]
-        /\  h[n].counter > 0 => \E Q \in Quorum : \A n2 \in Q \ byz : h[n] \in acceptedPrepared[n2]
-        /\  b1 \in externalized[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedCommitted[n2]
         /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] =>
-            /\  b1.counter <= ballot[n].counter
-            /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
+                /\  b1.counter > 0
+                /\  b1.counter <= ballot[n].counter
+                /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
+        /\  b1 \in acceptedPrepared[n] => AcceptedPrepared(b1)
+        /\  b1 \in acceptedCommitted[n] => AcceptedCommitted(b1)
+        /\  h[n].counter > 0 => AcceptedPrepared(h[n])
+        /\  b1 \in externalized[n] => AcceptedCommitted(b1)
         /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
         /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
+        \* Next, the two main invariants
+        \* 1) votes to commit have been prepared:
         /\  b1 \in voteToCommit[n] =>
-                /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
-                /\  b1 \preceq h[n] \* note this is important
-        \* Next, the crux of the matter:
-        \* (in short, a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold)
+                /\  b1 \preceq h[n] \* important, because this means a higher incompatible prepare must be the result of having aborted b1 (because h[n] must have been updated)
+                /\  \E c3 \in BallotNumber :
+                        /\  c1 <= c3
+                        /\  AcceptedPrepared(bal(c3,v1))
+        \* 2) a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold:
         /\  /\  b1 \in voteToCommit[n]
             /\  LessThanAndIncompatible(b1, b2)
             /\  b2 \in voteToPrepare[n]
@@ -239,58 +257,6 @@ InductiveInvariant ==
                     b1 \notin voteToCommit[n2] /\ ballot[n2].counter > b1.counter
     \* Finally, our goal:
     /\  Agreement
-
-Inv ==
-    \* /\  byz \in FailProneSet
-    /\  \A n \in N \ byz, c1,c2 \in BallotNumber, v1,v2 \in V :
-        LET b1 == bal(c1,v1) b2 == bal(c2,v2) IN
-    \*     /\  ballot[n].counter > -1 => ballot[n].counter > 0
-    \*     /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] => b1.counter > 0 /\ b1.counter <= ballot[n].counter
-    \*     /\  b1 \in acceptedPrepared[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToPrepare[n2]
-    \*     /\  b1 \in acceptedCommitted[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToCommit[n2]
-    \*     /\  h[n].counter > 0 => \E Q \in Quorum : \A n2 \in Q \ byz : h[n] \in acceptedPrepared[n2]
-    \*     /\  b1 \in externalized[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedCommitted[n2]
-    \*     /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] =>
-    \*         /\  b1.counter <= ballot[n].counter
-    \*         /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
-    \*     /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
-    \*     /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
-        \* /\  b1 \in voteToCommit[n] =>
-        \*         /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
-        \*         /\  b1 \preceq h[n] \* note this is important
-        \* Next, the crux of the matter:
-        \* (in short, a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold)
-        /\  /\  b1 \in voteToCommit[n]
-            /\  LessThanAndIncompatible(b1, b2)
-            /\  b2 \in voteToPrepare[n]
-            =>  \A Q \in Quorum : \E n2 \in Q \ byz :
-                    b1 \notin voteToCommit[n2] /\ ballot[n2].counter > b1.counter
-Inv_pre ==
-    /\  TypeOK
-    /\  byz \in FailProneSet
-    /\  \A n \in N \ byz, c1,c2 \in BallotNumber, v1,v2 \in V :
-        LET b1 == bal(c1,v1) b2 == bal(c2,v2) IN
-        /\  ballot[n].counter > -1 => ballot[n].counter > 0
-        /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] => b1.counter > 0 /\ b1.counter <= ballot[n].counter
-        /\  b1 \in acceptedPrepared[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToPrepare[n2]
-        /\  b1 \in acceptedCommitted[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in voteToCommit[n2]
-        /\  h[n].counter > 0 => \E Q \in Quorum : \A n2 \in Q \ byz : h[n] \in acceptedPrepared[n2]
-        /\  b1 \in externalized[n] => \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedCommitted[n2]
-        /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] =>
-            /\  b1.counter <= ballot[n].counter
-            /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
-        /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
-        /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
-        /\  b1 \in voteToCommit[n] =>
-                /\  \E Q \in Quorum : \A n2 \in Q \ byz : b1 \in acceptedPrepared[n2]
-                /\  b1 \preceq h[n] \* note this is important
-        \* Next, the crux of the matter:
-        \* (in short, a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold)
-        /\  /\  b1 \in voteToCommit[n]
-            /\  LessThanAndIncompatible(b1, b2)
-            /\  b2 \in voteToPrepare[n]
-            =>  \A Q \in Quorum : \E n2 \in Q \ byz :
-                    b1 \notin voteToCommit[n2] /\ ballot[n2].counter > b1.counter
 
 (***********************************************************************)
 (* LivenessInv1 shows that AcceptPrepared is never blocked by a lower, *)
