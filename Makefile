@@ -36,7 +36,8 @@ abwp-tlc: $(TLA_TOOLS_JAR)
 	java -Xmx${TLC_HEAP} -XX:+UseParallelGC -XX:MaxDirectMemorySize=${TLC_OFFHEAP_MEMORY} -Dtlc2.tool.fp.FPSet.impl=tlc2.tool.fp.OffHeapDiskFPSet -Dtlc2.tool.ModelChecker.BAQueue=true -jar tla2tools.jar -workers ${TLC_WORKERS} -checkpoint 30 -generateSpecTE TLCAbstractBallotingWithPrepare.tla
 
 abwp-apa: $(APA)
-	APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBallotingWithPrepare
+	APA=$(APA) ./check.sh -inductive AgreementInductiveInvariant AbstractBallotingWithPrepare
+	APA=$(APA) ./check.sh -inductive LivenessInductiveInvariant AbstractBallotingWithPrepare
 
 test: $(APA)
 	# APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBallotingWithPrepare

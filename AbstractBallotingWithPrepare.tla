@@ -97,7 +97,7 @@ AcceptPrepared(n, b, S) ==
     \* /\  \A b2 \in Ballot : b \prec b2 => \neg (b2 \in acceptedPrepared[n]) \* TODO what is this?
     /\  \/ S \in Quorum /\ \A n2 \in S \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
         \/ S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
-    \* For safety of intertwined but befouled validators (see LivenessInv1 for why this does not hurt liveness):
+    \* For safety of intertwined but befouled validators (see the liveness invariant for why this does not hurt liveness):
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b2, b) => b2 \notin acceptedCommitted[n]
     /\  acceptedPrepared' = [acceptedPrepared EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
@@ -225,7 +225,37 @@ ConfirmedCommitted(b) ==
 AcceptedCommitted(b) ==
     \E Q \in Quorum : \A n \in Q \ byz : b \in voteToCommit[n]
 
-InductiveInvariant ==
+AgreementInductiveInvariant ==
+    /\  TypeOK
+    /\  byz \in FailProneSet
+    /\  \A n \in N \ byz, c1,c2 \in BallotNumber, v1,v2 \in V :
+        LET b1 == bal(c1,v1) b2 == bal(c2,v2) IN
+        /\  ballot[n].counter > -1 => ballot[n].counter > 0
+        /\  b1 \in voteToPrepare[n] \/ b1 \in voteToCommit[n] =>
+                /\  b1.counter > 0
+                /\  b1.counter <= ballot[n].counter
+                /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
+        (* /\  b1 \in acceptedPrepared[n] => AcceptedPrepared(b1) *)
+        (* /\  b1 \in acceptedCommitted[n] => AcceptedCommitted(b1) *)
+        /\  h[n].counter > 0 => ConfirmedPrepared(h[n])
+        /\  b1 \in externalized[n] => ConfirmedCommitted(b1)
+        /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
+        /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
+        /\  b1 \in acceptedCommitted[n] => \E c3 \in BallotNumber : b1.counter <= c3 /\ ConfirmedPrepared(bal(c3, b1.value))
+        /\  b2 \in acceptedPrepared[n] /\ LessThanAndIncompatible(b1,b2) => \neg b1 \in acceptedCommitted[n]
+    \* Finally, our goal:
+    /\  Agreement
+
+(**************************************************************************************)
+(* For liveness, the crux is that, in a synchronous Byzantine-free ballot, all        *)
+(* well-behaved nodes end up setting h to the highest ballot that has been            *)
+(* confirmed prepared by the system. This works because nodes are never prevented     *)
+(* to accept something prepared by an incompatible ballot that is accepted            *)
+(* committed, which we show here. In fact we show a stronger property: if a ballot    *)
+(* is prepared by a quorum, then no lower and incompatible ballot has been            *)
+(* accepted committed.                                                                *)
+(**************************************************************************************)
+LivenessInductiveInvariant ==
     \* First, the boring stuff:
     /\  TypeOK
     /\  byz \in FailProneSet
@@ -255,17 +285,10 @@ InductiveInvariant ==
             /\  b2 \in voteToPrepare[n]
             =>  \A Q \in Quorum : \E n2 \in Q \ byz :
                     b1 \notin voteToCommit[n2] /\ ballot[n2].counter > b1.counter
-    \* Finally, our goal:
-    /\  Agreement
-
-(***********************************************************************)
-(* LivenessInv1 shows that AcceptPrepared is never blocked by a lower, *)
-(* incompatible ballot that is accepted committed.                     *)
-(***********************************************************************)
-LivenessInv1 == \A b1,b2 \in Ballot, n1 \in N \ byz :
-    /\  \E Q \in Quorum : \A n2 \in Q \ byz : b2 \in voteToPrepare[n2]
-    /\  b1 \in acceptedCommitted[n1]
-    /\  b1 \prec b2
-    =>  b1.value = b2.value
+        \* Finally, our goal:
+        /\  /\  AcceptedPrepared(b2)
+            /\  AcceptedCommitted(b1)
+            /\  b1 \prec b2
+            =>  b1.value = b2.value
 
 ==============================================
