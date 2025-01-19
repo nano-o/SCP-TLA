@@ -26,7 +26,6 @@
 (* statements.                                                                        *)
 (**************************************************************************************)
 
-
 EXTENDS DomainModel
 
 VARIABLES
@@ -160,7 +159,6 @@ DropMessage(n, b) == \* TODO for use in liveness checking
 (* Finally we put everything together: *)
 (***************************************)
 Next ==
-    \* \/ ByzantineHavoc
     \/ \E n \in N \ byz, S \in SUBSET N :
         \/  VoteToCommit(n, S)
         \/  AcceptCommitted(n, S)
@@ -235,8 +233,6 @@ AgreementInductiveInvariant ==
                 /\  b1.counter > 0
                 /\  b1.counter <= ballot[n].counter
                 /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
-        (* /\  b1 \in acceptedPrepared[n] => AcceptedPrepared(b1) *)
-        (* /\  b1 \in acceptedCommitted[n] => AcceptedCommitted(b1) *)
         /\  h[n].counter > 0 => ConfirmedPrepared(h[n])
         /\  b1 \in externalized[n] => ConfirmedCommitted(b1)
         /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
