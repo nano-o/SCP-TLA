@@ -133,7 +133,7 @@ AcceptCommitted(n, S) == LET b == ballot[n] IN
     /\  \/  S \in Quorum /\ \A n2 \in S \ byz : b \in voteToCommit[n2]
         \/  S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedCommitted[n2]
     \* next two lines to ensure safety to intertwined but befouled validators:
-    /\  b \in acceptedPrepared[n] \* TODO: shouldn't this be confirmed prepared?
+    /\  b \preceq h[n] /\ h[n].value = b.value
     /\  \A b2 \in Ballot : LessThanAndIncompatible(b, b2) => b2 \notin acceptedPrepared[n]
     /\  acceptedCommitted' = [acceptedCommitted EXCEPT ![n] = @ \cup {b}]
     /\  UNCHANGED <<ballot, h, voteToPrepare, acceptedPrepared, voteToCommit, externalized, byz, syncBal>>
