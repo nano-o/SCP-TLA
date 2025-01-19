@@ -238,8 +238,8 @@ InductiveInvariant ==
                 /\  b1.counter = ballot[n].counter => b1.value = ballot[n].value
         /\  b1 \in acceptedPrepared[n] => AcceptedPrepared(b1)
         /\  b1 \in acceptedCommitted[n] => AcceptedCommitted(b1)
-        /\  h[n].counter > 0 => AcceptedPrepared(h[n])
-        /\  b1 \in externalized[n] => AcceptedCommitted(b1)
+        /\  h[n].counter > 0 => ConfirmedPrepared(h[n])
+        /\  b1 \in externalized[n] => ConfirmedCommitted(b1)
         /\  bal(c1,v1) \in voteToPrepare[n] /\ bal(c1,v2) \in voteToPrepare[n] => v1 = v2
         /\  bal(c1,v1) \in voteToCommit[n] /\ bal(c1,v2) \in voteToCommit[n] => v1 = v2
         \* Next, the two main invariants
@@ -247,8 +247,8 @@ InductiveInvariant ==
         /\  b1 \in voteToCommit[n] =>
                 /\  b1 \preceq h[n] \* important, because this means a higher incompatible prepare must be the result of having aborted b1 (because h[n] must have been updated)
                 /\  \E c3 \in BallotNumber :
-                        /\  c1 <= c3
-                        /\  AcceptedPrepared(bal(c3,v1))
+                        /\  b1.counter <= c3
+                        /\  AcceptedPrepared(bal(c3, b1.value))
         \* 2) a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold:
         /\  /\  b1 \in voteToCommit[n]
             /\  LessThanAndIncompatible(b1, b2)
