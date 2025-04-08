@@ -4,9 +4,10 @@ APA=apalache-${APA_VERSION}
 APA_ARCHIVE=$(APA).tgz
 TLA_TOOLS_JAR=tla2tools.jar
 TLA_TOOLS_JAR_URL=https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-TLC_WORKERS=16
-TLC_OFFHEAP_MEMORY=30G
-TLC_HEAP=10G
+TLC_WORKERS=8
+TLC_OFFHEAP_MEMORY=27
+TLC_HEAP=5G
+TLA_SPEC?=
 
 all:
 
@@ -39,9 +40,19 @@ abwp-apa: $(APA)
 	APA=$(APA) ./check.sh -inductive AgreementInductiveInvariant AbstractBallotingWithPrepare
 	APA=$(APA) ./check.sh -inductive LivenessInductiveInvariant AbstractBallotingWithPrepare
 
-test: $(APA)
-	# APA=$(APA) ./check.sh -inductive InductiveInvariant AbstractBallotingWithPrepare
-	# APA=$(APA) ./check.sh -relative Inv_pre Inv AbstractBallotingWithPrepare
-	# APA=$(APA) ./check.sh -implication InductiveInvariant LivenessInv1 AbstractBallotingWithPrepare
+trans: $(TLA_TOOLS_JAR) $(TLA_SPEC)
+	@if [ -z "$(TLA_SPEC)" ]; then \
+	  echo "Error: TLA_SPEC is not set. Use make run-tlc TLA_SPEC=YourSpec.tla"; \
+	  exit 1; \
+	fi
+	java -cp $(TLA_TOOLS_JAR) pcal.trans -nocfg $(TLA_SPEC)
+
+
+run-tlc: $(TLA_TOOLS_JAR) $(TLA_SPEC)
+	@if [ -z "$(TLA_SPEC)" ]; then \
+	  echo "Error: TLA_SPEC is not set. Use make run-tlc TLA_SPEC=YourSpec.tla"; \
+	  exit 1; \
+	fi
+	$(TLC_CMD) $(TLA_SPEC)
 
 .PHONY: abstract-scp-safety balloting-refinement typeset all

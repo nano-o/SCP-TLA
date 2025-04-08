@@ -127,96 +127,6 @@ lb2:    with (b \in {ballotingTxSet[v] : v \in V} \ {Bot}) {
         }
     }
 } *)
-\* BEGIN TRANSLATION (chksum(pcal) = "b24885fb" /\ chksum(tla) = "95d64d8b")
-VARIABLES ballotingTxSet, decision, voted, accepted, pc, round, candidates, 
-          preImage, leader
-
-vars == << ballotingTxSet, decision, voted, accepted, pc, round, candidates, 
-           preImage, leader >>
-
-ProcSet == (V) \cup ({<<v, "balloting">> : v \in V})
-
-Init == (* Global variables *)
-        /\ ballotingTxSet = [v \in V |-> Bot]
-        /\ decision = [v \in V |-> Bot]
-        /\ voted = [v \in V |-> {}]
-        /\ accepted = [v \in V |-> {}]
-        (* Process nomination *)
-        /\ round = [self \in V |-> 0]
-        /\ candidates = [self \in V |-> {}]
-        /\ preImage = [self \in V |-> [h \in H |-> Bot]]
-        /\ leader = [self \in V |-> Bot]
-        /\ pc = [self \in ProcSet |-> CASE self \in V -> "ln1"
-                                        [] self \in {<<v, "balloting">> : v \in V} -> "lb1"]
-
-ln1(self) == /\ pc[self] = "ln1"
-             /\ \/ /\ round' = [round EXCEPT ![self] = round[self] + 1]
-                   /\ \E l \in V:
-                        /\ leader' = [leader EXCEPT ![self] = l]
-                        /\ IF l = self
-                              THEN /\ \E txs \in TxSet:
-                                        /\ preImage' = [preImage EXCEPT ![self][Hash(txs)] = txs]
-                                        /\ voted' = [voted EXCEPT ![self] = voted[self] \union {Hash(txs)}]
-                              ELSE /\ TRUE
-                                   /\ UNCHANGED << voted, preImage >>
-                   /\ UNCHANGED <<ballotingTxSet, accepted, candidates>>
-                \/ /\ IF candidates[self] = {}
-                         THEN /\ leader[self] # Bot
-                              /\ LET hs == voted[leader[self]] IN
-                                   /\ hs # {}
-                                   /\ voted' = [voted EXCEPT ![self] = voted[self] \union hs]
-                         ELSE /\ TRUE
-                              /\ voted' = voted
-                   /\ UNCHANGED <<ballotingTxSet, accepted, round, candidates, preImage, leader>>
-                \/ /\ \E Q \in Quorum(self):
-                        \E h \in H:
-                          /\ preImage[self][h] # Bot
-                          /\ \A w \in Q : h \in voted[w] \/ h \in accepted[w]
-                          /\ accepted' = [accepted EXCEPT ![self] = accepted[self] \union {h}]
-                   /\ UNCHANGED <<ballotingTxSet, voted, round, candidates, preImage, leader>>
-                \/ /\ \E Bl \in Blocking(self):
-                        \E h \in H:
-                          /\ preImage[self][h] # Bot
-                          /\ \A w \in Bl : h \in accepted[w]
-                          /\ accepted' = [accepted EXCEPT ![self] = accepted[self] \union {h}]
-                   /\ UNCHANGED <<ballotingTxSet, voted, round, candidates, preImage, leader>>
-                \/ /\ \E txs \in TxSet:
-                        preImage' = [preImage EXCEPT ![self][Hash(txs)] = txs]
-                   /\ UNCHANGED <<ballotingTxSet, voted, accepted, round, candidates, leader>>
-                \/ /\ \E Q \in Quorum(self):
-                        \E h \in H:
-                          /\ preImage[self][h] # Bot
-                          /\ \A w \in Q : h \in accepted[w]
-                          /\ candidates' = [candidates EXCEPT ![self] = candidates[self] \union {preImage[self][h]}]
-                          /\ ballotingTxSet' = [ballotingTxSet EXCEPT ![self] = Combine(candidates'[self])]
-                   /\ UNCHANGED <<voted, accepted, round, preImage, leader>>
-             /\ pc' = [pc EXCEPT ![self] = "ln1"]
-             /\ UNCHANGED decision
-
-nomination(self) == ln1(self)
-
-lb1(self) == /\ pc[self] = "lb1"
-             /\ ballotingTxSet[self[1]] # Bot
-             /\ pc' = [pc EXCEPT ![self] = "lb2"]
-             /\ UNCHANGED << ballotingTxSet, decision, voted, accepted, round, 
-                             candidates, preImage, leader >>
-
-lb2(self) == /\ pc[self] = "lb2"
-             /\ \E b \in {ballotingTxSet[v] : v \in V} \ {Bot}:
-                  /\ \A w \in V : decision[w] # Bot => b = decision[w]
-                  /\ decision' = [decision EXCEPT ![self[1]] = b]
-             /\ pc' = [pc EXCEPT ![self] = "Done"]
-             /\ UNCHANGED << ballotingTxSet, voted, accepted, round, 
-                             candidates, preImage, leader >>
-
-balloting(self) == lb1(self) \/ lb2(self)
-
-Next == (\E self \in V: nomination(self))
-           \/ (\E self \in {<<v, "balloting">> : v \in V}: balloting(self))
-
-Spec == Init /\ [][Next]_vars
-
-\* END TRANSLATION 
 
 (***************************************************************************)
 (* The type-safety invariant:                                              *)
@@ -231,7 +141,7 @@ TypeOkay ==
     /\ candidates \in [V -> SUBSET TxSet]
     /\ preImage \in [V -> [H -> TxSet \cup {Bot}]]
     /\ leader \in [V -> V \cup {Bot}]
-    
+
 (***************************************************************************)
 (* Next we specify a liveness property that we can easily check with the   *)
 (* TLC model-checker.                                                      *)
@@ -249,11 +159,11 @@ TypeOkay ==
 
 NominationLiveness ==
     \A v,w \in V : [](ballotingTxSet[v] # Bot => <>(ballotingTxSet[w] # Bot))
-    
+
 (***************************************************************************)
 (* Definition for model-checking:                                          *)
 (***************************************************************************)
-    
+
 \* Concrete hashing for the model-checker:
 TestH == 1..Cardinality(TxSet)
 TestHash(b) ==
