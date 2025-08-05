@@ -60,26 +60,14 @@ Init ==
     /\ byz \in FailProneSet \* byz is initially set to an arbitrary fail-prone set
     /\ syncBal \in BallotNumber
 
-(***********************************************************************************)
-(* Node n enters a new ballot and votes to prepare it. Note that n votes to        *)
-(* prepare its new ballot ballot'[n] regardless of whether it has previously voted *)
-(* to commit an incompatible ballot b. The main subtlety of the protocol is that   *)
-(* this is okay because:                                                           *)
-(*                                                                                 *)
-(*     1) We must have b \prec h[n] because, when n votes to commit b (see         *)
-(*     VoteToCommit), it sets h[n] = b if h[n] \prec b, and subsequently h[n] can  *)
-(*     only grow, and                                                              *)
-(*                                                                                 *)
-(*     2) therefore, if h[n].value # b.value, then n confirmed h[n] as prepared    *)
-(*     (by definition of how h[n] is updated) and thus we know that, even though n *)
-(*     voted to commit b, b can never gather a quorum of votes to commit.          *)
-(*                                                                                 *)
-(* Note how this reasoning appears in the inductive invariant below.               *)
-(***********************************************************************************)
-
+(**************************************************************************************)
+(* Node n enters a new ballot and votes to prepare it. Note that n votes to           *)
+(* prepare its new ballot ballot'[n] regardless of whether it has previously voted    *)
+(* to commit an incompatible ballot b. This is okay, as ballot'[n].value must be      *)
+(* its highest confirmed prepared value.                                              *)
+(**************************************************************************************)
 IncreaseBallotCounter(n, c) ==
     /\  c > 0
-    /\  syncBal # 0 => c <= syncBal
     /\  c > ballot[n].counter
     /\  h[n].counter <= c
     /\  IF h[n] # nullBallot
@@ -87,12 +75,12 @@ IncreaseBallotCounter(n, c) ==
         ELSE \E v \in V : ballot' = [ballot EXCEPT ![n] = bal(c, v)]
     /\  voteToPrepare' = [voteToPrepare EXCEPT ![n] = @ \cup {ballot[n]'}]
     /\  UNCHANGED <<h, acceptedPrepared, voteToCommit, acceptedCommitted, externalized, byz, syncBal>>
+    /\  syncBal # 0 => c <= syncBal
 
 (***********************************************************************)
 (* Next we describe when a node accepts and confirms ballots prepared. *)
 (***********************************************************************)
 AcceptPrepared(n, b, S) ==
-    \* /\  \A b2 \in Ballot : b \prec b2 => \neg (b2 \in acceptedPrepared[n]) \* TODO what is this?
     /\  \/ S \in Quorum /\ \A n2 \in S \ byz : b \in voteToPrepare[n2] \cup acceptedPrepared[n2]
         \/ S \in BlockingSet /\ \A n2 \in S \ byz : b \in acceptedPrepared[n2]
     \* For safety of intertwined but befouled validators (see the liveness invariant for why this does not hurt liveness):
@@ -247,8 +235,8 @@ AgreementInductiveInvariant ==
 (* confirmed prepared by the system. This works because nodes are never prevented     *)
 (* to accept something prepared by an incompatible ballot that is accepted            *)
 (* committed, which we show here. In fact we show a stronger property: if a ballot    *)
-(* is prepared by a quorum, then no lower and incompatible ballot has been            *)
-(* accepted committed.                                                                *)
+(* is accepted prepare (i.e. voted prepared by a quorum), then no lower and           *)
+(* incompatible ballot has been accepted committed.                                   *)
 (**************************************************************************************)
 LivenessInductiveInvariant ==
     \* First, the boring stuff:
@@ -272,7 +260,7 @@ LivenessInductiveInvariant ==
         /\  b1 \in voteToCommit[n] =>
                 /\  b1 \preceq h[n] \* important, because this means a higher incompatible prepare must be the result of having aborted b1 (because h[n] must have been updated)
                 /\  \E c3 \in BallotNumber :
-                        /\  b1.counter <= c3
+                        /\  b1.counter <= c3 \* TODO: why do we need <=?
                         /\  AcceptedPrepared(bal(c3, b1.value))
         \* 2) a node overrides "commit v" only if it is sure that "commit v" cannot reach quorum threshold:
         /\  /\  b1 \in voteToCommit[n]
