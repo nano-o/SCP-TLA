@@ -1,9 +1,5 @@
 ------------- MODULE ChainConsensus -------------
 
-(**************************************************************************************)
-(* TODO: model passing blocks through the interface                                   *)
-(**************************************************************************************)
-
 EXTENDS Sequences, Naturals, TLC
 
 CONSTANTS
@@ -27,6 +23,14 @@ c1 \prec c2 == c1 # c2 /\ \preceq(c1, c2) \* strict prefix
 (* Two chains are compatible when one is a prefix of the other                        *)
 (**************************************************************************************)
 Compatible(c1, c2) == c1 \preceq c2 \/ c2 \preceq c1
+
+(**************************************************************************************)
+(* An operator to extract missing suffixes:                                           *)
+(**************************************************************************************)
+MissingSuffix(c1, c2) ==
+    IF c1 \prec c2
+    THEN [i \in 1..(Len(c2)-Len(c1)) |-> c2[Len(c1)+i]]
+    ELSE <<>>
 
 (**************************************************************************************)
 (* Applying a block to a database results in a new database state or fails            *)
@@ -61,7 +65,8 @@ VARIABLES
 ,   validateInterface \* interface variable for validation
 ,   externalizeInterface \* interface variable for externalizing blocks
 ,   dbState \* local database state
-,   proposedChains
+,   validChains
+,   lastApplied \* last chain a node applied
 
 TypeOK == \* the type invariant
     /\  proposalInterface \in
@@ -74,14 +79,16 @@ TypeOK == \* the type invariant
                 \cup {<<"VALID">>, <<"INVALID">>}]
     /\  externalizeInterface \in [N -> Chain]
     /\  dbState \in [N -> DB]
-    /\  proposedChains \in SUBSET Chain
+    /\  validChains \in SUBSET Chain
+    /\  lastApplied \in [N -> Chain]
 
 Init ==
     /\  proposalInterface = [n \in N |-> <<"NULL">>]
     /\  validateInterface = [n \in N |-> <<"NULL">>]
     /\  externalizeInterface = [n \in N |-> <<>>]
     /\  dbState = [n \in N |-> InitDB]
-    /\  proposedChains = {}
+    /\  validChains = {}
+    /\  lastApplied = [n \in N |-> <<>>]
 
 (**************************************************************************************)
 (* Consensus asks the application at node n for a new block. The new block must be    *)
@@ -89,8 +96,9 @@ Init ==
 (**************************************************************************************)
 RequestProposal(n, tip) ==
     /\  externalizeInterface[n] \preceq tip
+    /\  tip \in validChains
     /\  proposalInterface' = [proposalInterface EXCEPT ![n] = <<"PROPOSAL REQUEST", tip>>]
-    /\  UNCHANGED <<validateInterface, externalizeInterface, dbState, proposedChains>>
+    /\  UNCHANGED <<validateInterface, externalizeInterface, dbState, validChains, lastApplied>>
 
 (**************************************************************************************)
 (* The application at node n proposes a new block to consensus:                       *)
@@ -101,49 +109,57 @@ Propose(n, b) ==
             proposal == Append(tip, b)
         IN  /\  Valid(proposal)
             /\  proposalInterface' = [proposalInterface EXCEPT ![n] = <<"PROPOSAL", proposal>>]
-            /\  proposedChains' = proposedChains \cup {proposal}
-    /\  UNCHANGED <<validateInterface, externalizeInterface, dbState>>
+            /\  validChains' = validChains \cup {proposal}
+    /\  UNCHANGED <<validateInterface, externalizeInterface, dbState, lastApplied>>
 
 (**************************************************************************************)
 (* Consensus asks the application at node n to validate chain c:                      *)
 (**************************************************************************************)
 Validate(n, c) ==
     /\  validateInterface' = [validateInterface EXCEPT ![n] = <<"VALIDATION REQUEST", c>>]
-    /\  UNCHANGED <<proposalInterface, externalizeInterface, dbState, proposedChains>>
+    /\  UNCHANGED <<proposalInterface, externalizeInterface, dbState, validChains, lastApplied>>
 
 (**************************************************************************************)
 (* The application at node n responds to a validation request:                        *)
 (**************************************************************************************)
 Validated(n) ==
     /\  validateInterface[n][1] = "VALIDATION REQUEST"
-    /\  LET valid == Valid(validateInterface[n][2])
-        IN  validateInterface' = [validateInterface EXCEPT ![n] =
-            IF valid THEN <<"VALID">> ELSE <<"INVALID">>]
-    /\  UNCHANGED <<proposalInterface, externalizeInterface, dbState, proposedChains>>
+    /\  LET chain == validateInterface[n][2]
+            valid == Valid(chain)
+        IN  IF valid
+            THEN    /\  validateInterface' = [validateInterface EXCEPT ![n] = <<"VALID">>]
+                    /\  validChains' = validChains \cup {chain}
+            ELSE    /\  validateInterface' = [validateInterface EXCEPT ![n] = <<"INVALID">>]
+                    /\  UNCHANGED validChains
+    /\  UNCHANGED <<proposalInterface, externalizeInterface, dbState, lastApplied>>
 
 (**************************************************************************************)
 (* Consensus externalizes a new chain at node n                                       *)
 (**************************************************************************************)
 Externalize(n, c) ==
-    /\  c \in proposedChains /\ Valid(c) \* c is a valid proposed chain
-    /\  externalizeInterface[n] \prec c \* c extends the last externalized chain
+    /\  c \in validChains
+    /\  externalizeInterface[n] \prec c \* c extends the last chain externalized at node n
     /\  \A n2 \in N : Compatible(externalizeInterface[n2], c) \* c is compatible with all externalized chains
     /\  externalizeInterface' = [externalizeInterface EXCEPT ![n] = c]
-    /\  UNCHANGED <<proposalInterface, validateInterface, dbState, proposedChains>>
+    /\  UNCHANGED <<proposalInterface, validateInterface, dbState, validChains, lastApplied>>
 
 (**************************************************************************************)
 (* The application at node n applies the latest externalizeInterface chain to its     *)
-(* database                                                                           *)
+(* database. In a more detailed specification, the application would need to query    *)
+(* the consensus layer for missing blocks.                                            *)
 (**************************************************************************************)
 ApplyToDB(n) ==
-    /\  dbState' = [dbState EXCEPT ![n] = ApplyChain(InitDB, externalizeInterface[n])]
-    /\  UNCHANGED <<proposalInterface, validateInterface, externalizeInterface, proposedChains>>
+    LET c == externalizeInterface[n]
+        missing == MissingSuffix(lastApplied[n], c)
+    IN  /\  dbState' = [dbState EXCEPT ![n] = ApplyChain(dbState[n], missing)]
+        /\  lastApplied' = [lastApplied EXCEPT ![n] = c]
+        /\  UNCHANGED <<proposalInterface, validateInterface, externalizeInterface, validChains>>
 
 (**************************************************************************************)
 (* Final specification                                                                *)
 (**************************************************************************************)
 
-vars == <<proposalInterface, validateInterface, externalizeInterface, dbState, proposedChains>>
+vars == <<proposalInterface, validateInterface, externalizeInterface, dbState, validChains>>
 
 Next == \E n \in N, c \in Chain, b \in Block :
     \/  RequestProposal(n, c)

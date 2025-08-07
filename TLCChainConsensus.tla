@@ -20,12 +20,16 @@ ApplyMC(db, b) ==
             ELSE db
 
 Falsy1 == \neg (
-    \E c1, c2 \in proposedChains : \neg Compatible(c1, c2)
+    \E c1, c2 \in validChains : \neg Compatible(c1, c2)
 )
 
 Falsy2 == \neg (
-    \E c1 \in proposedChains : \E c2 \in {externalizeInterface[n] : n \in N} :
+    \E c1 \in validChains : \E c2 \in {externalizeInterface[n] : n \in N} :
         \neg Compatible(c1 ,c2)
+)
+
+Falsy3 == \neg (
+    \E n \in N : Len(lastApplied[n]) = MaxSeqLen
 )
 
 ====================================================
