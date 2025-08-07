@@ -95,7 +95,7 @@ Init ==
 (* valid when appended to the provided tip:                                           *)
 (**************************************************************************************)
 RequestProposal(n, tip) ==
-    /\  externalizeInterface[n] \preceq tip
+    /\  externalizeInterface[n] \preceq tip \* must be extending the last chain externalized at n
     /\  tip \in validChains
     /\  proposalInterface' = [proposalInterface EXCEPT ![n] = <<"PROPOSAL REQUEST", tip>>]
     /\  UNCHANGED <<validateInterface, externalizeInterface, dbState, validChains, lastApplied>>
@@ -107,7 +107,7 @@ Propose(n, b) ==
     /\  proposalInterface[n][1] = "PROPOSAL REQUEST"
     /\  LET tip == proposalInterface[n][2]
             proposal == Append(tip, b)
-        IN  /\  Valid(proposal)
+        IN  /\  Valid(proposal) \* appending b to the tip must result in a valid chain
             /\  proposalInterface' = [proposalInterface EXCEPT ![n] = <<"PROPOSAL", proposal>>]
             /\  validChains' = validChains \cup {proposal}
     /\  UNCHANGED <<validateInterface, externalizeInterface, dbState, lastApplied>>
@@ -145,8 +145,7 @@ Externalize(n, c) ==
 
 (**************************************************************************************)
 (* The application at node n applies the latest externalizeInterface chain to its     *)
-(* database. In a more detailed specification, the application would need to query    *)
-(* the consensus layer for missing blocks.                                            *)
+(* database.                                                                          *)
 (**************************************************************************************)
 ApplyToDB(n) ==
     LET c == externalizeInterface[n]
